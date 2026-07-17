@@ -1,6 +1,19 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, Circle, Layers, Droplets, MessageCircle, User, Play, Pause, Eye, Plus, X, Send } from 'lucide-react';
+import { Loader2, Circle, Layers, Droplets, MessageCircle, User, Play, Pause, Eye, Plus, X, Send, Lock } from 'lucide-react';
+
+export interface ChatMessage {
+  sender: string;
+  message: string;
+  timestamp: Date;
+}
+
+export interface LowkeyThread {
+  id: string;
+  targetPostAuthor: string;
+  originalSnippet: string;
+  messages: ChatMessage[];
+}
 
 const adjectives = ["Shadow", "Ghost", "Cypress", "Mint", "Echo", "Lunar", "Sage", "Amber"];
 const nouns = ["Pulse", "Wanderer", "Stardust", "Glitch", "Static", "Cinder", "Vibe"];
@@ -282,7 +295,7 @@ const MOCK_FEEDS: Record<string, Array<{id: string, author: string, timeAgo: str
 };
 
 // --- Spill Card Component ---
-const SpillCard = ({ item, frequency }: { item: any, frequency: typeof FREQUENCIES[0] }) => {
+const SpillCard = ({ item, frequency, onReply }: { item: any, frequency: typeof FREQUENCIES[0], onReply: (item: any) => void }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const waveform = [4, 8, 12, 6, 16, 10, 14, 8, 6, 12, 16, 8];
 
@@ -370,11 +383,13 @@ const SpillCard = ({ item, frequency }: { item: any, frequency: typeof FREQUENCI
       </div>
 
       {/* Footer */}
-      <div className="flex items-center gap-1.5 pt-1 border-t border-white/[0.04] pt-3">
-        <MessageCircle size={14} style={{ color: frequency.textColor }} />
-        <span className="text-[#8E9A92] text-[12px] font-medium">
-          Reply Lowkey
-        </span>
+      <div className="flex items-center justify-end border-t border-white/[0.04] pt-3">
+        <button onClick={() => onReply(item)} className="flex items-center gap-1.5 hover:opacity-80 transition-opacity active:scale-95">
+          <span className="text-[#8E9A92] text-[12px] font-medium">
+            Reply Lowkey
+          </span>
+          <MessageCircle size={14} style={{ color: frequency.textColor }} />
+        </button>
       </div>
     </motion.div>
   );
@@ -387,6 +402,12 @@ const DashboardScreen = ({ frequency, userIdentity }: { frequency: typeof FREQUE
   const [isSpillSheetOpen, setIsSpillSheetOpen] = useState(false);
   const [spillText, setSpillText] = useState('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // New Lowkey State
+  const [privateThreads, setPrivateThreads] = useState<LowkeyThread[]>([]);
+  const [isLowkeySheetOpen, setIsLowkeySheetOpen] = useState(false);
+  const [lowkeyTargetCard, setLowkeyTargetCard] = useState<any | null>(null);
+  const [chatText, setChatText] = useState('');
 
   const _dispatchNewTransmission = () => {
     if (!spillText.trim()) return;
@@ -405,6 +426,35 @@ const DashboardScreen = ({ frequency, userIdentity }: { frequency: typeof FREQUE
     
     setToastMessage("Transmission broadcasted down the wire successfully.");
     setTimeout(() => setToastMessage(null), 2000);
+  };
+
+  const handleReplyClick = (card: any) => {
+    if (card.author === userIdentity) {
+      setToastMessage("You cannot build a private room with yourself.");
+      setTimeout(() => setToastMessage(null), 2000);
+    } else {
+      setLowkeyTargetCard(card);
+      setIsLowkeySheetOpen(true);
+    }
+  };
+
+  const _dispatchNewThread = () => {
+    if (!chatText.trim() || !lowkeyTargetCard) return;
+    const newThread: LowkeyThread = {
+      id: Date.now().toString(),
+      targetPostAuthor: lowkeyTargetCard.author,
+      originalSnippet: lowkeyTargetCard.text.length > 40 ? lowkeyTargetCard.text.slice(0, 40) + "..." : lowkeyTargetCard.text,
+      messages: [{
+        sender: userIdentity,
+        message: chatText.trim(),
+        timestamp: new Date()
+      }]
+    };
+    setPrivateThreads([newThread, ...privateThreads]);
+    setChatText('');
+    setIsLowkeySheetOpen(false);
+    setLowkeyTargetCard(null);
+    setActiveTab('lowkey');
   };
 
   const tabs = [
@@ -438,7 +488,7 @@ const DashboardScreen = ({ frequency, userIdentity }: { frequency: typeof FREQUE
             initial={{ opacity: 0, y: -20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -20, scale: 0.95 }}
-            className="absolute top-12 left-1/2 -translate-x-1/2 z-50 bg-[#2ECC71] text-[#0B0F0C] px-5 py-3 rounded-[12px] font-bold text-[14px] shadow-[0_0_30px_rgba(46,204,113,0.3)] whitespace-nowrap"
+            className="absolute top-12 left-1/2 -translate-x-1/2 z-50 bg-[#2ECC71] text-[#0B0F0C] px-5 py-3 rounded-[12px] font-bold text-[14px] shadow-[0_0_30px_rgba(46,204,113,0.3)] whitespace-nowrap text-center max-w-[90vw]"
           >
             {toastMessage}
           </motion.div>
@@ -486,7 +536,7 @@ const DashboardScreen = ({ frequency, userIdentity }: { frequency: typeof FREQUE
               className="pt-2"
             >
               {feeds.map(item => (
-                <SpillCard key={item.id} item={item} frequency={frequency} />
+                <SpillCard key={item.id} item={item} frequency={frequency} onReply={handleReplyClick} />
               ))}
             </motion.div>
           )}
@@ -497,11 +547,34 @@ const DashboardScreen = ({ frequency, userIdentity }: { frequency: typeof FREQUE
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="h-full min-h-[300px] flex flex-col items-center justify-center text-center px-8"
+              className={`h-full ${privateThreads.length === 0 ? 'min-h-[300px] flex flex-col items-center justify-center text-center px-8' : 'pt-2 space-y-4 pb-4'}`}
             >
-              <p className="text-[#8E9A92] text-[15px] leading-relaxed max-w-xs border border-white/5 bg-white/5 p-6 rounded-[20px] backdrop-blur-sm">
-                Your private replies and encrypted threads live here.
-              </p>
+              {privateThreads.length === 0 ? (
+                <div className="flex flex-col items-center">
+                  <Lock size={32} className="text-[#8E9A92] mb-4 opacity-50" />
+                  <p className="text-white text-[16px] font-bold mb-2">No Private Rooms Yet</p>
+                  <p className="text-[#8E9A92] text-[14px] leading-relaxed max-w-[240px]">
+                    Tap the reply icon on any transmission to start an encrypted thread.
+                  </p>
+                </div>
+              ) : (
+                privateThreads.map(thread => (
+                  <div key={thread.id} className="bg-[rgba(14,20,17,0.7)] rounded-[16px] border border-white/[0.06] p-[18px] backdrop-blur-md">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-[11px] font-bold tracking-wider uppercase" style={{ color: frequency.textColor }}>Private Room</span>
+                      <span className="text-[#8E9A92] text-[11px]">Just Now</span>
+                    </div>
+                    <h4 className="text-white font-bold text-[14px] mb-1">{thread.targetPostAuthor}</h4>
+                    <p className="text-[#8E9A92] text-[13px] italic mb-4 truncate">"{thread.originalSnippet}"</p>
+                    
+                    <div className="flex justify-end mt-2">
+                      <div className="rounded-tl-[16px] rounded-tr-[16px] rounded-bl-[16px] rounded-br-[4px] px-4 py-2.5 max-w-[85%]" style={{ backgroundColor: frequency.textColor }}>
+                        <p className="text-[#0B0F0C] text-[14px] font-medium leading-[1.4]">{thread.messages[0].message}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
             </motion.div>
           )}
 
@@ -567,11 +640,12 @@ const DashboardScreen = ({ frequency, userIdentity }: { frequency: typeof FREQUE
         </div>
       </motion.div>
 
-      {/* Spill Bottom Sheet */}
+      {/* Bottom Sheets */}
+      
+      {/* Spill Sheet */}
       <AnimatePresence>
         {isSpillSheetOpen && (
           <>
-            {/* Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -579,7 +653,6 @@ const DashboardScreen = ({ frequency, userIdentity }: { frequency: typeof FREQUE
               onClick={() => setIsSpillSheetOpen(false)}
               className="absolute inset-0 bg-black/60 backdrop-blur-sm z-40"
             />
-            {/* Sheet */}
             <motion.div
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
@@ -617,6 +690,58 @@ const DashboardScreen = ({ frequency, userIdentity }: { frequency: typeof FREQUE
           </>
         )}
       </AnimatePresence>
+
+      {/* Lowkey Reply Sheet */}
+      <AnimatePresence>
+        {isLowkeySheetOpen && lowkeyTargetCard && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsLowkeySheetOpen(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm z-40"
+            />
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 200 }}
+              className="absolute bottom-0 inset-x-0 bg-[#0F1311] z-50 rounded-t-[24px] p-6 pb-[max(24px,env(safe-area-inset-bottom))]"
+            >
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-[#8E9A92] font-medium text-[14px]">
+                  Anonymously replying to <span className="text-white font-bold">{lowkeyTargetCard.author}</span>
+                </h2>
+                <button onClick={() => setIsLowkeySheetOpen(false)} className="text-[#8E9A92] hover:text-[#2ECC71] transition-colors">
+                  <X size={24} />
+                </button>
+              </div>
+              
+              <p className="text-white/60 italic text-[14px] mb-4 pl-3 border-l-2" style={{ borderColor: frequency.textColor }}>
+                "{lowkeyTargetCard.text.length > 35 ? lowkeyTargetCard.text.slice(0, 35) + "..." : lowkeyTargetCard.text}"
+              </p>
+              
+              <textarea
+                autoFocus
+                value={chatText}
+                onChange={e => setChatText(e.target.value)}
+                rows={1}
+                placeholder="Send an encrypted whisper..."
+                className="w-full bg-black/30 rounded-[12px] p-4 text-white text-[16px] placeholder:text-white/30 outline-none resize-none focus:ring-1 focus:ring-white/10 mb-5"
+              />
+              
+              <button
+                onClick={_dispatchNewThread}
+                className="w-full py-[14px] rounded-[12px] flex items-center justify-center gap-2 transition-transform active:scale-[0.98] bg-[#2ECC71]"
+              >
+                <span className="text-[#0B0F0C] font-bold">Initialize Thread</span>
+              </button>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
     </motion.div>
   );
 };

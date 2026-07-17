@@ -404,12 +404,12 @@ const DashboardScreen = ({ frequency, userIdentity }: { frequency: typeof FREQUE
     const newThread: LowkeyThread = {
       id: Date.now().toString(),
       targetPostAuthor: lowkeyTargetCard.author,
-      originalSnippet: lowkeyTargetCard.text.length > 40 ? lowkeyTargetCard.text.slice(0, 40) + "..." : lowkeyTargetCard.text,
-      messages: [{
-        sender: userIdentity,
-        message: chatText.trim(),
-        timestamp: new Date()
-      }]
+      originalSnippet: lowkeyTargetCard.text,
+      messages: [
+        { sender: lowkeyTargetCard.author, message: "This is bad", timestamp: new Date() },
+        { sender: lowkeyTargetCard.author, message: "Is it true", timestamp: new Date() },
+        { sender: userIdentity, message: chatText.trim(), timestamp: new Date() }
+      ]
     };
     setPrivateThreads([newThread, ...privateThreads]);
     setChatText('');
@@ -545,7 +545,7 @@ const DashboardScreen = ({ frequency, userIdentity }: { frequency: typeof FREQUE
                   {/* Snippet Banner */}
                   <div className="w-full bg-white/[0.02] p-3 text-center border-b border-white/5 shrink-0">
                     <span className="text-[#8E9A92] text-[14px] italic">
-                      Original Thread Snippet: "{activeChatThread.originalSnippet}"
+                      Original Thread Snippet: "{activeChatThread.originalSnippet.length > 45 ? activeChatThread.originalSnippet.slice(0, 45) + '...' : activeChatThread.originalSnippet}"
                     </span>
                   </div>
 
@@ -556,7 +556,7 @@ const DashboardScreen = ({ frequency, userIdentity }: { frequency: typeof FREQUE
                       return (
                         <div key={idx} className={`max-w-[75%] flex flex-col ${isMe ? 'self-end' : 'self-start'}`}>
                           <div 
-                            className={`px-4 py-3 mb-3 text-[15px] text-white leading-relaxed border ${isMe ? 'bg-[#4A1A1A] border-[#7B2424]' : 'bg-[#1C2821] border-[#2A3D32]'}`}
+                            className={`px-4 py-3 mb-3 text-[15px] text-white leading-relaxed border ${isMe ? 'bg-[#122216] border-[#1E3A27]' : 'bg-[#1A1212] border-[#3A1E1E]'}`}
                             style={{ borderRadius: isMe ? '16px 16px 2px 16px' : '16px 16px 16px 2px' }}
                           >
                             {msg.message}
@@ -617,7 +617,7 @@ const DashboardScreen = ({ frequency, userIdentity }: { frequency: typeof FREQUE
                     
                     <div className="flex justify-end mt-2">
                       <div className="rounded-tl-[16px] rounded-tr-[16px] rounded-bl-[16px] rounded-br-[4px] px-4 py-2.5 max-w-[85%]" style={{ backgroundColor: frequency.textColor }}>
-                        <p className="text-[#0B0F0C] text-[14px] font-medium leading-[1.4]">{thread.messages[0].message}</p>
+                        <p className="text-[#0B0F0C] text-[14px] font-medium leading-[1.4]">{thread.messages[thread.messages.length - 1].message}</p>
                       </div>
                     </div>
                   </div>

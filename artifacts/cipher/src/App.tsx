@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, Circle, Layers, Droplets, MessageCircle, User, Play, Pause, Eye, Plus } from 'lucide-react';
+import { Loader2, Circle, Layers, Droplets, MessageCircle, User, Play, Pause, Eye, Plus, X, Send } from 'lucide-react';
 
 const adjectives = ["Shadow", "Ghost", "Cypress", "Mint", "Echo", "Lunar", "Sage", "Amber"];
 const nouns = ["Pulse", "Wanderer", "Stardust", "Glitch", "Static", "Cinder", "Vibe"];
@@ -381,8 +381,31 @@ const SpillCard = ({ item, frequency }: { item: any, frequency: typeof FREQUENCI
 };
 
 // --- Screen 3: Dashboard ---
-const DashboardScreen = ({ frequency }: { frequency: typeof FREQUENCIES[0] }) => {
+const DashboardScreen = ({ frequency, userIdentity }: { frequency: typeof FREQUENCIES[0], userIdentity: string }) => {
   const [activeTab, setActiveTab] = useState('feeds');
+  const [feeds, setFeeds] = useState(() => MOCK_FEEDS[frequency.id] || []);
+  const [isSpillSheetOpen, setIsSpillSheetOpen] = useState(false);
+  const [spillText, setSpillText] = useState('');
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const _dispatchNewTransmission = () => {
+    if (!spillText.trim()) return;
+    const newCard = {
+      id: Date.now().toString(),
+      author: userIdentity,
+      timeAgo: "Just Now",
+      text: spillText.trim(),
+      type: "text" as const
+    };
+    
+    setFeeds([newCard, ...feeds]);
+    setSpillText('');
+    setIsSpillSheetOpen(false);
+    setActiveTab('feeds');
+    
+    setToastMessage("Transmission broadcasted down the wire successfully.");
+    setTimeout(() => setToastMessage(null), 2000);
+  };
 
   const tabs = [
     { id: 'feeds', label: 'Feeds', icon: Layers },
@@ -407,6 +430,20 @@ const DashboardScreen = ({ frequency }: { frequency: typeof FREQUENCIES[0] }) =>
         className="absolute inset-0 opacity-[0.04] pointer-events-none mix-blend-overlay" 
         style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=%220 0 200 200%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22noiseFilter%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.65%22 numOctaves=%223%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23noiseFilter)%22/%3E%3C/svg%3E")' }}
       />
+
+      {/* Toast Notification */}
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            className="absolute top-12 left-1/2 -translate-x-1/2 z-50 bg-[#2ECC71] text-[#0B0F0C] px-5 py-3 rounded-[12px] font-bold text-[14px] shadow-[0_0_30px_rgba(46,204,113,0.3)] whitespace-nowrap"
+          >
+            {toastMessage}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Header */}
       <motion.div 
@@ -448,26 +485,9 @@ const DashboardScreen = ({ frequency }: { frequency: typeof FREQUENCIES[0] }) =>
               exit={{ opacity: 0, y: -10 }}
               className="pt-2"
             >
-              {MOCK_FEEDS[frequency.id]?.map(item => (
+              {feeds.map(item => (
                 <SpillCard key={item.id} item={item} frequency={frequency} />
               ))}
-            </motion.div>
-          )}
-
-          {activeTab === 'spill' && (
-            <motion.div 
-              key="spill"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="h-full min-h-[300px] flex flex-col items-center justify-center text-center px-8"
-            >
-              <p className="text-[#8E9A92] text-[15px] mb-8 leading-relaxed max-w-xs">
-                Drop a new transmission into the frequency.
-              </p>
-              <button className="w-16 h-16 rounded-full bg-[#2ECC71] flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-[0_0_30px_rgba(46,204,113,0.3)]">
-                <Plus size={32} className="text-[#0B0F0C]" />
-              </button>
             </motion.div>
           )}
 
@@ -514,10 +534,16 @@ const DashboardScreen = ({ frequency }: { frequency: typeof FREQUENCIES[0] }) =>
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => {
+                  if (tab.id === 'spill') {
+                    setIsSpillSheetOpen(true);
+                  } else {
+                    setActiveTab(tab.id);
+                  }
+                }}
                 className="flex flex-col items-center gap-1.5 p-2 w-16 transition-all duration-300 relative"
               >
-                {isSelected && (
+                {isSelected && tab.id !== 'spill' && (
                   <motion.div
                     layoutId="navIndicator"
                     className="absolute -top-3 w-8 h-1 rounded-full opacity-60"
@@ -525,13 +551,13 @@ const DashboardScreen = ({ frequency }: { frequency: typeof FREQUENCIES[0] }) =>
                   />
                 )}
                 <tab.icon 
-                  className={`w-[22px] h-[22px] transition-colors duration-300 ${isSelected ? 'opacity-100' : 'opacity-50 hover:opacity-80'}`} 
-                  style={{ color: isSelected ? frequency.textColor : '#8E9A92' }}
-                  strokeWidth={isSelected ? 2.5 : 2}
+                  className={`w-[22px] h-[22px] transition-colors duration-300 ${isSelected && tab.id !== 'spill' ? 'opacity-100' : 'opacity-50 hover:opacity-80'}`} 
+                  style={{ color: isSelected && tab.id !== 'spill' ? frequency.textColor : '#8E9A92' }}
+                  strokeWidth={isSelected && tab.id !== 'spill' ? 2.5 : 2}
                 />
                 <span 
-                  className={`text-[10px] font-medium tracking-wide transition-colors duration-300 ${isSelected ? 'opacity-100' : 'opacity-50'}`}
-                  style={{ color: isSelected ? frequency.textColor : '#8E9A92' }}
+                  className={`text-[10px] font-medium tracking-wide transition-colors duration-300 ${isSelected && tab.id !== 'spill' ? 'opacity-100' : 'opacity-50'}`}
+                  style={{ color: isSelected && tab.id !== 'spill' ? frequency.textColor : '#8E9A92' }}
                 >
                   {tab.label}
                 </span>
@@ -540,6 +566,57 @@ const DashboardScreen = ({ frequency }: { frequency: typeof FREQUENCIES[0] }) =>
           })}
         </div>
       </motion.div>
+
+      {/* Spill Bottom Sheet */}
+      <AnimatePresence>
+        {isSpillSheetOpen && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsSpillSheetOpen(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm z-40"
+            />
+            {/* Sheet */}
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 200 }}
+              className="absolute bottom-0 inset-x-0 bg-[#0E1411] z-50 rounded-t-[24px] p-6 pb-[max(24px,env(safe-area-inset-bottom))]"
+            >
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-white font-bold text-[18px]">Spill to {frequency.name}</h2>
+                <button onClick={() => setIsSpillSheetOpen(false)} className="text-[#8E9A92] hover:text-[#2ECC71] transition-colors">
+                  <X size={24} />
+                </button>
+              </div>
+              
+              <textarea
+                autoFocus
+                value={spillText}
+                onChange={e => setSpillText(e.target.value)}
+                rows={5}
+                placeholder="What's weighing down your thoughts lowkey?..."
+                className="w-full bg-black/30 rounded-[12px] p-4 text-white text-[16px] placeholder:text-white/30 outline-none resize-none focus:ring-1 focus:ring-white/10"
+              />
+              
+              <div className="h-5" />
+              
+              <button
+                onClick={_dispatchNewTransmission}
+                className="w-full py-[14px] rounded-[12px] flex items-center justify-center gap-2 transition-transform active:scale-[0.98]"
+                style={{ backgroundColor: frequency.textColor }}
+              >
+                <Send size={18} className="text-[#0B0F0C]" />
+                <span className="text-[#0B0F0C] font-bold">Broadcast Secretly</span>
+              </button>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 };
@@ -571,8 +648,8 @@ export default function App() {
         {screen === 'frequency' && identity && (
           <FrequencySelectionScreen key="frequency" identity={identity} onSelect={handleFrequencySelect} />
         )}
-        {screen === 'dashboard' && frequency && (
-          <DashboardScreen key="dashboard" frequency={frequency} />
+        {screen === 'dashboard' && frequency && identity && (
+          <DashboardScreen key="dashboard" frequency={frequency} userIdentity={identity} />
         )}
       </AnimatePresence>
     </div>

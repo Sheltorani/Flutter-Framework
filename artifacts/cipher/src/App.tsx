@@ -60,27 +60,14 @@ const AmbientBackground = () => (
 
 // --- Screen 1: Onboarding ---
 const OnboardingScreen = ({ onComplete }: { onComplete: (id: string) => void }) => {
-  const [loading, setLoading] = useState(false);
-  const [identity, setIdentity] = useState<string | null>(null);
+  const [identity, setIdentity] = useState<string>("Lunar_Static-512");
 
-  const generateIdentity = () => {
-    if (identity) return; // Prevent regenerating if already locked in
-    setLoading(true);
-    setTimeout(() => {
-      const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
-      const noun = nouns[Math.floor(Math.random() * nouns.length)];
-      const num = Math.floor(100 + Math.random() * 900);
-      const generatedId = `${adj}_${noun}-${num}`;
-      
-      setIdentity(generatedId);
-      setLoading(false);
-      
-      // Wait 1 second after showing identity, then transition
-      setTimeout(() => {
-        onComplete(generatedId);
-      }, 1000);
-    }, 1500);
-  };
+  React.useEffect(() => {
+    const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
+    const noun = nouns[Math.floor(Math.random() * nouns.length)];
+    const num = Math.floor(100 + Math.random() * 900);
+    setIdentity(`${adj}_${noun}-${num}`);
+  }, []);
 
   return (
     <motion.div 
@@ -121,14 +108,12 @@ const OnboardingScreen = ({ onComplete }: { onComplete: (id: string) => void }) 
           transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
           className="w-full relative group"
         >
-          {identity && !loading && (
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 1 }}
-              className="absolute -inset-0.5 bg-[#2ECC71] rounded-[18px] opacity-20 blur-md transition-opacity"
-            />
-          )}
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 1 }}
+            className="absolute -inset-0.5 bg-[#2ECC71] rounded-[18px] opacity-20 blur-md transition-opacity"
+          />
 
           <div className="w-full bg-[#121A15] border border-[#1E3A27] rounded-[16px] p-6 relative flex flex-col items-center justify-center min-h-[140px] shadow-2xl overflow-hidden">
             <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-[#2ECC71]/30 to-transparent" />
@@ -136,39 +121,15 @@ const OnboardingScreen = ({ onComplete }: { onComplete: (id: string) => void }) 
               Your Assigned Identity
             </h2>
             <div className="flex items-center justify-center min-h-[32px]">
-              <AnimatePresence mode="wait">
-                {loading ? (
-                  <motion.div
-                    key="loading"
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.8 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    <Loader2 className="w-7 h-7 text-[#2ECC71] animate-spin" />
-                  </motion.div>
-                ) : identity ? (
-                  <motion.div
-                    key="identity"
-                    initial={{ opacity: 0, y: 10, filter: 'blur(4px)' }}
-                    animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-                    transition={{ duration: 0.6, ease: "easeOut" }}
-                    className="text-white text-[24px] font-bold tracking-wider font-mono text-center"
-                  >
-                    {identity}
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    key="placeholder"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="text-[#4A5D52] text-[16px] font-mono text-center tracking-tight"
-                  >
-                    Searching the frequency...
-                  </motion.div>
-                )}
-              </AnimatePresence>
+              <motion.div
+                key="identity"
+                initial={{ opacity: 0, y: 10, filter: 'blur(4px)' }}
+                animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                transition={{ duration: 0.6, ease: "easeOut" }}
+                className="text-white text-[24px] font-bold tracking-wider font-mono text-center"
+              >
+                {identity}
+              </motion.div>
             </div>
           </div>
         </motion.div>
@@ -180,24 +141,19 @@ const OnboardingScreen = ({ onComplete }: { onComplete: (id: string) => void }) 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.4, ease: "easeOut" }}
-          whileHover={!loading && !identity ? { scale: 1.02, filter: 'brightness(1.1)' } : {}}
-          whileTap={!loading && !identity ? { scale: 0.98 } : {}}
-          onClick={generateIdentity}
-          disabled={loading || !!identity}
-          className={`w-full py-4 rounded-[12px] text-[#0B0F0C] font-bold text-[18px] tracking-wide transition-all duration-300 relative overflow-hidden group
-            ${loading || identity ? 'bg-[#1a7340] cursor-not-allowed opacity-80' : 'bg-[#2ECC71] hover:shadow-[0_0_20px_rgba(46,204,113,0.25)]'}
-          `}
+          whileHover={{ scale: 1.02, filter: 'brightness(1.1)' }}
+          whileTap={{ scale: 0.98 }}
+          onClick={() => onComplete(identity)}
+          className="w-full py-4 rounded-[12px] bg-[#2ECC71] hover:shadow-[0_0_20px_rgba(46,204,113,0.25)] text-[#0B0F0C] font-bold text-[18px] tracking-wide transition-all duration-300 relative overflow-hidden group"
         >
-          {!loading && !identity && (
-            <motion.div
-              className="absolute inset-0 bg-gradient-to-b from-white/0 via-white/30 to-white/0 opacity-0 group-hover:opacity-100 transition-opacity"
-              initial={{ y: '-100%' }}
-              animate={{ y: '200%' }}
-              transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
-            />
-          )}
+          <motion.div
+            className="absolute inset-0 bg-gradient-to-b from-white/0 via-white/30 to-white/0 opacity-0 group-hover:opacity-100 transition-opacity"
+            initial={{ y: '-100%' }}
+            animate={{ y: '200%' }}
+            transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
+          />
           <span className="relative z-10 block">
-            {identity ? "Identity Locked" : "Enter My Frequency"}
+            Enter My Frequency
           </span>
         </motion.button>
       </div>
@@ -401,7 +357,7 @@ const DashboardScreen = ({ frequency, userIdentity }: { frequency: typeof FREQUE
   const [feeds, setFeeds] = useState(() => MOCK_FEEDS[frequency.id] || []);
   const [isSpillSheetOpen, setIsSpillSheetOpen] = useState(false);
   const [spillText, setSpillText] = useState('');
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
   // New Lowkey State
   const [privateThreads, setPrivateThreads] = useState<LowkeyThread[]>([]);
@@ -429,13 +385,13 @@ const DashboardScreen = ({ frequency, userIdentity }: { frequency: typeof FREQUE
     setIsSpillSheetOpen(false);
     setActiveTab('feeds');
     
-    setToastMessage("Transmission broadcasted down the wire successfully.");
+    setToastMessage({ text: "Transmission broadcasted down the wire successfully.", type: 'success' });
     setTimeout(() => setToastMessage(null), 2000);
   };
 
   const handleReplyClick = (card: any) => {
     if (card.author === userIdentity) {
-      setToastMessage("You cannot build a private room with yourself.");
+      setToastMessage({ text: "You cannot build a private room with yourself.", type: 'error' });
       setTimeout(() => setToastMessage(null), 2000);
     } else {
       setLowkeyTargetCard(card);
@@ -509,12 +465,12 @@ const DashboardScreen = ({ frequency, userIdentity }: { frequency: typeof FREQUE
       <AnimatePresence>
         {toastMessage && (
           <motion.div
-            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            initial={{ opacity: 0, y: 20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -20, scale: 0.95 }}
-            className="absolute top-12 left-1/2 -translate-x-1/2 z-50 bg-[#2ECC71] text-[#0B0F0C] px-5 py-3 rounded-[12px] font-bold text-[14px] shadow-[0_0_30px_rgba(46,204,113,0.3)] whitespace-nowrap text-center max-w-[90vw]"
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            className={`absolute bottom-24 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl font-bold text-[14px] shadow-lg whitespace-nowrap text-center max-w-[90vw] ${toastMessage.type === 'error' ? 'bg-[#E74C3C] text-white' : 'bg-[#2ECC71] text-[#0B0F0C]'}`}
           >
-            {toastMessage}
+            {toastMessage.text}
           </motion.div>
         )}
       </AnimatePresence>
@@ -598,8 +554,11 @@ const DashboardScreen = ({ frequency, userIdentity }: { frequency: typeof FREQUE
                     {activeChatThread.messages.map((msg, idx) => {
                       const isMe = msg.sender === userIdentity;
                       return (
-                        <div key={idx} className={`max-w-[80%] flex flex-col ${isMe ? 'self-end items-end' : 'self-start items-start'} mb-2`}>
-                          <div className={`px-[14px] py-[10px] rounded-[12px] text-white text-[14px] leading-[1.4] ${isMe ? 'bg-[#5C1E1E] rounded-br-[4px]' : 'bg-[#222B24] rounded-bl-[4px]'}`}>
+                        <div key={idx} className={`max-w-[75%] flex flex-col ${isMe ? 'self-end' : 'self-start'}`}>
+                          <div 
+                            className={`px-4 py-3 mb-3 text-[15px] text-white leading-relaxed border ${isMe ? 'bg-[#4A1A1A] border-[#7B2424]' : 'bg-[#1C2821] border-[#2A3D32]'}`}
+                            style={{ borderRadius: isMe ? '16px 16px 2px 16px' : '16px 16px 16px 2px' }}
+                          >
                             {msg.message}
                           </div>
                         </div>

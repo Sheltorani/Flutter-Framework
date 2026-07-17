@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, Circle, Layers, Droplets, MessageCircle, User, Play, Pause, Eye, Plus, X, Send, Lock } from 'lucide-react';
+import { Loader2, Circle, Layers, Droplets, MessageCircle, User, Play, Pause, Eye, Plus, X, Send, Lock, ArrowLeft } from 'lucide-react';
 
 export interface ChatMessage {
   sender: string;
@@ -408,6 +408,10 @@ const DashboardScreen = ({ frequency, userIdentity }: { frequency: typeof FREQUE
   const [isLowkeySheetOpen, setIsLowkeySheetOpen] = useState(false);
   const [lowkeyTargetCard, setLowkeyTargetCard] = useState<any | null>(null);
   const [chatText, setChatText] = useState('');
+  
+  const [innerChatText, setInnerChatText] = useState('');
+  const [userTotalSpillsCount, setUserTotalSpillsCount] = useState(0);
+  const [activeChatThread, setActiveChatThread] = useState<LowkeyThread | null>(null);
 
   const _dispatchNewTransmission = () => {
     if (!spillText.trim()) return;
@@ -420,6 +424,7 @@ const DashboardScreen = ({ frequency, userIdentity }: { frequency: typeof FREQUE
     };
     
     setFeeds([newCard, ...feeds]);
+    setUserTotalSpillsCount(prev => prev + 1);
     setSpillText('');
     setIsSpillSheetOpen(false);
     setActiveTab('feeds');
@@ -455,6 +460,25 @@ const DashboardScreen = ({ frequency, userIdentity }: { frequency: typeof FREQUE
     setIsLowkeySheetOpen(false);
     setLowkeyTargetCard(null);
     setActiveTab('lowkey');
+  };
+
+  const _dispatchInnerMessage = () => {
+    if (!innerChatText.trim() || !activeChatThread) return;
+    
+    const newMsg: ChatMessage = {
+      sender: userIdentity,
+      message: innerChatText.trim(),
+      timestamp: new Date()
+    };
+
+    const updatedThread = {
+      ...activeChatThread,
+      messages: [...activeChatThread.messages, newMsg]
+    };
+
+    setPrivateThreads(prev => prev.map(t => t.id === activeChatThread.id ? updatedThread : t));
+    setActiveChatThread(updatedThread);
+    setInnerChatText('');
   };
 
   const tabs = [
@@ -524,7 +548,7 @@ const DashboardScreen = ({ frequency, userIdentity }: { frequency: typeof FREQUE
 
       {/* Main Area */}
       <motion.div 
-        className="flex-1 overflow-y-auto px-4 relative z-10 pb-6 scrollbar-hide"
+        className={`flex-1 relative z-10 scrollbar-hide ${activeTab === 'lowkey' && activeChatThread ? 'flex flex-col overflow-hidden' : 'overflow-y-auto px-4 pb-6'}`}
       >
         <AnimatePresence mode="wait">
           {activeTab === 'feeds' && (
@@ -547,9 +571,70 @@ const DashboardScreen = ({ frequency, userIdentity }: { frequency: typeof FREQUE
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className={`h-full ${privateThreads.length === 0 ? 'min-h-[300px] flex flex-col items-center justify-center text-center px-8' : 'pt-2 space-y-4 pb-4'}`}
+              className={`h-full ${activeChatThread ? 'flex flex-col bg-[#0B0F0C]' : privateThreads.length === 0 ? 'min-h-[300px] flex flex-col items-center justify-center text-center px-8' : 'pt-2 space-y-4 pb-4'}`}
             >
-              {privateThreads.length === 0 ? (
+              {activeChatThread ? (
+                <>
+                  {/* Chat Room Header */}
+                  <div className="flex items-center px-4 py-3 border-b border-white/5 bg-[#0B0F0C] shrink-0">
+                    <button onClick={() => setActiveChatThread(null)} className="p-2 -ml-2 mr-2 text-[#8E9A92] hover:text-white transition-colors">
+                      <ArrowLeft size={20} />
+                    </button>
+                    <div className="flex-1 flex flex-col">
+                      <span className="font-bold text-[16px]" style={{ color: frequency.textColor }}>{activeChatThread.targetPostAuthor}</span>
+                      <span className="text-[#8E9A92] text-[11px] uppercase tracking-wider mt-0.5">Encrypted Secure Tunnel</span>
+                    </div>
+                  </div>
+                  
+                  {/* Snippet Banner */}
+                  <div className="w-full bg-white/[0.02] p-3 text-center border-b border-white/5 shrink-0">
+                    <span className="text-[#8E9A92] text-[14px] italic">
+                      Original Thread Snippet: "{activeChatThread.originalSnippet}"
+                    </span>
+                  </div>
+
+                  {/* Messages List */}
+                  <div className="flex-1 overflow-y-auto p-4 flex flex-col scrollbar-hide">
+                    {activeChatThread.messages.map((msg, idx) => {
+                      const isMe = msg.sender === userIdentity;
+                      return (
+                        <div key={idx} className={`max-w-[80%] flex flex-col ${isMe ? 'self-end items-end' : 'self-start items-start'} mb-2`}>
+                          <div className={`px-[14px] py-[10px] rounded-[12px] text-white text-[14px] leading-[1.4] ${isMe ? 'bg-[#5C1E1E] rounded-br-[4px]' : 'bg-[#222B24] rounded-bl-[4px]'}`}>
+                            {msg.message}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Input Bar */}
+                  <div className="p-3 border-t border-white/5 bg-[#0B0F0C] shrink-0">
+                    <div className="flex items-end gap-2 bg-white/5 rounded-[24px] px-2 py-1.5 focus-within:ring-1 focus-within:ring-white/10 transition-shadow">
+                      <textarea
+                        value={innerChatText}
+                        onChange={e => setInnerChatText(e.target.value)}
+                        placeholder="Type encrypted reply..."
+                        rows={1}
+                        className="flex-1 bg-transparent border-none text-white text-[15px] px-3 py-2 max-h-[100px] outline-none resize-none placeholder:text-white/30"
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            _dispatchInnerMessage();
+                          }
+                        }}
+                      />
+                      <button 
+                        onClick={_dispatchInnerMessage}
+                        disabled={!innerChatText.trim()}
+                        className="p-2 shrink-0 disabled:opacity-50 transition-opacity"
+                        style={{ color: frequency.textColor }}
+                      >
+                        <Send size={18} />
+                      </button>
+                    </div>
+                  </div>
+                </>
+              ) : privateThreads.length === 0 ? (
                 <div className="flex flex-col items-center">
                   <Lock size={32} className="text-[#8E9A92] mb-4 opacity-50" />
                   <p className="text-white text-[16px] font-bold mb-2">No Private Rooms Yet</p>
@@ -559,7 +644,11 @@ const DashboardScreen = ({ frequency, userIdentity }: { frequency: typeof FREQUE
                 </div>
               ) : (
                 privateThreads.map(thread => (
-                  <div key={thread.id} className="bg-[rgba(14,20,17,0.7)] rounded-[16px] border border-white/[0.06] p-[18px] backdrop-blur-md">
+                  <div 
+                    key={thread.id} 
+                    onClick={() => setActiveChatThread(thread)}
+                    className="bg-[rgba(14,20,17,0.7)] rounded-[16px] border border-white/[0.06] p-[18px] backdrop-blur-md cursor-pointer active:scale-[0.98] transition-transform"
+                  >
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-[11px] font-bold tracking-wider uppercase" style={{ color: frequency.textColor }}>Private Room</span>
                       <span className="text-[#8E9A92] text-[11px]">Just Now</span>

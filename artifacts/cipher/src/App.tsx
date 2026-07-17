@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, Circle, Layers, Droplets, MessageCircle, User } from 'lucide-react';
+import { Loader2, Circle, Layers, Droplets, MessageCircle, User, Play, Pause, Eye, Plus } from 'lucide-react';
 
 const adjectives = ["Shadow", "Ghost", "Cypress", "Mint", "Echo", "Lunar", "Sage", "Amber"];
 const nouns = ["Pulse", "Wanderer", "Stardust", "Glitch", "Static", "Cinder", "Vibe"];
@@ -265,6 +265,121 @@ const FrequencySelectionScreen = ({ identity, onSelect }: { identity: string, on
   );
 };
 
+// --- Mock Data ---
+const MOCK_FEEDS: Record<string, Array<{id: string, author: string, timeAgo: string, text: string, type: 'text'|'voice'|'video'}>> = {
+  the_lost: [
+    { id: '1', author: "Sage_Echo-402", timeAgo: "2m ago", text: "I still pass by their favorite restaurant and look inside, hoping it was all a bad dream.", type: "text" },
+    { id: '2', author: "Mint_Drifter-881", timeAgo: "14m ago", text: "Listen to the tone of my voice... am I going crazy or does grief sound completely empty?", type: "voice" },
+    { id: '3', author: "Ghost_Spire-112", timeAgo: "1h ago", text: "Cleaning out his room today. Found an old hoodie that still smells exactly like him.", type: "video" }
+  ],
+  the_lovers: [
+    { id: '4', author: "Amber_Cinder-901", timeAgo: "5m ago", text: "You unfollowed me but you still look at my stories from an alternative account. I see you.", type: "text" },
+    { id: '5', author: "Lunar_Pulse-334", timeAgo: "32m ago", text: "I left a voice note explaining why I had to walk away, but I can't muster the courage to hit send.", type: "voice" }
+  ],
+  the_dreamers: [
+    { id: '6', author: "Neon_Glitch-774", timeAgo: "1m ago", text: "Designing a full consumer tech platform completely from a mobile browser right now. People think it's impossible.", type: "text" }
+  ]
+};
+
+// --- Spill Card Component ---
+const SpillCard = ({ item, frequency }: { item: any, frequency: typeof FREQUENCIES[0] }) => {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const waveform = [4, 8, 12, 6, 16, 10, 14, 8, 6, 12, 16, 8];
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-[rgba(14,20,17,0.7)] rounded-[16px] border border-white/[0.06] mb-4 p-[18px] backdrop-blur-md"
+    >
+      {/* Header */}
+      <div className="flex justify-between items-center mb-3">
+        <span className="font-bold text-[13px]" style={{ color: frequency.textColor }}>
+          {item.author}
+        </span>
+        <span className="text-[#8E9A92] text-[11px]">
+          {item.timeAgo}
+        </span>
+      </div>
+
+      {/* Content */}
+      <div className="mb-4">
+        {item.type === 'text' && (
+          <p className="text-white text-[15px] leading-[1.4] whitespace-pre-wrap">
+            {item.text}
+          </p>
+        )}
+        
+        {item.type === 'voice' && (
+          <div className="space-y-3">
+            <p className="text-[#8E9A92] text-[14px] italic leading-[1.4] whitespace-pre-wrap">
+              {item.text}
+            </p>
+            <div className="bg-[#0B0F0C]/60 rounded-full py-2 px-3 flex items-center gap-3 border border-white/5">
+              <button 
+                onClick={() => setIsPlaying(!isPlaying)}
+                className="w-8 h-8 rounded-full bg-[#2ECC71]/10 flex items-center justify-center text-[#2ECC71] hover:bg-[#2ECC71]/20 transition-colors"
+              >
+                {isPlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" className="ml-0.5" />}
+              </button>
+              <div className="flex-1 flex items-center gap-1.5 h-6">
+                {waveform.map((h, i) => (
+                  <motion.div 
+                    key={i}
+                    className="w-1 rounded-full bg-[#2ECC71]"
+                    animate={isPlaying ? {
+                      height: [h, Math.max(4, h - 4), Math.min(16, h + 4), h],
+                    } : { height: h }}
+                    transition={{
+                      duration: 0.6,
+                      repeat: Infinity,
+                      delay: i * 0.05
+                    }}
+                  />
+                ))}
+              </div>
+              <span className="text-[#8E9A92] text-[12px] font-medium pr-2">
+                0:24 Voice Note
+              </span>
+            </div>
+          </div>
+        )}
+
+        {item.type === 'video' && (
+          <div className="space-y-3">
+            <p className="text-[#8E9A92] text-[14px] italic leading-[1.4] whitespace-pre-wrap">
+              {item.text}
+            </p>
+            <div className="h-[140px] rounded-[12px] overflow-hidden relative flex flex-col items-center justify-center border border-white/5 bg-gradient-to-b from-[#0E1411] to-[#0B0F0C]">
+              {/* Blur / Noise effect */}
+              <div 
+                className="absolute inset-0 opacity-[0.15] mix-blend-overlay" 
+                style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=%220 0 200 200%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22noiseFilter%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.85%22 numOctaves=%223%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23noiseFilter)%22/%3E%3C/svg%3E")' }}
+              />
+              <div className="absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.5)_50%)] bg-[length:100%_4px] opacity-30" />
+              
+              <div className="absolute inset-0 backdrop-blur-md bg-black/10" />
+              
+              <Eye className="w-10 h-10 text-[#2ECC71] relative z-10 mb-2 opacity-80" />
+              <span className="text-[#8E9A92] text-[11px] font-bold tracking-wider uppercase relative z-10">
+                Permanently Pixelated Stream
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div className="flex items-center gap-1.5 pt-1 border-t border-white/[0.04] pt-3">
+        <MessageCircle size={14} style={{ color: frequency.textColor }} />
+        <span className="text-[#8E9A92] text-[12px] font-medium">
+          Reply Lowkey
+        </span>
+      </div>
+    </motion.div>
+  );
+};
+
 // --- Screen 3: Dashboard ---
 const DashboardScreen = ({ frequency }: { frequency: typeof FREQUENCIES[0] }) => {
   const [activeTab, setActiveTab] = useState('feeds');
@@ -282,7 +397,7 @@ const DashboardScreen = ({ frequency }: { frequency: typeof FREQUENCIES[0] }) =>
       initial={{ opacity: 0, x: 100 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-      className="absolute inset-0 w-full h-full flex flex-col z-10"
+      className="absolute inset-0 w-full h-full flex flex-col z-10 overflow-hidden"
       style={{
         background: `linear-gradient(to bottom, ${frequency.gradient[0]}, ${frequency.gradient[1]})`
       }}
@@ -298,7 +413,7 @@ const DashboardScreen = ({ frequency }: { frequency: typeof FREQUENCIES[0] }) =>
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, delay: 0.3 }}
-        className="w-full px-6 pt-12 pb-6 flex justify-between items-start relative z-10"
+        className="w-full px-6 pt-12 pb-4 flex justify-between items-start relative z-10 shrink-0"
       >
         <div className="flex flex-col gap-1.5">
           <span className="text-[#8E9A92] text-[11px] tracking-[1.5px] font-bold uppercase">
@@ -322,14 +437,68 @@ const DashboardScreen = ({ frequency }: { frequency: typeof FREQUENCIES[0] }) =>
 
       {/* Main Area */}
       <motion.div 
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.8, delay: 0.5 }}
-        className="flex-1 flex items-center justify-center px-8 relative z-10 text-center"
+        className="flex-1 overflow-y-auto px-4 relative z-10 pb-6 scrollbar-hide"
       >
-        <p className="text-[#8E9A92] text-[15px] max-w-xs leading-relaxed border border-white/5 bg-white/5 p-6 rounded-[20px] backdrop-blur-sm">
-          Confession feeds locked to this environment will stream here...
-        </p>
+        <AnimatePresence mode="wait">
+          {activeTab === 'feeds' && (
+            <motion.div 
+              key="feeds"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="pt-2"
+            >
+              {MOCK_FEEDS[frequency.id]?.map(item => (
+                <SpillCard key={item.id} item={item} frequency={frequency} />
+              ))}
+            </motion.div>
+          )}
+
+          {activeTab === 'spill' && (
+            <motion.div 
+              key="spill"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="h-full min-h-[300px] flex flex-col items-center justify-center text-center px-8"
+            >
+              <p className="text-[#8E9A92] text-[15px] mb-8 leading-relaxed max-w-xs">
+                Drop a new transmission into the frequency.
+              </p>
+              <button className="w-16 h-16 rounded-full bg-[#2ECC71] flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-[0_0_30px_rgba(46,204,113,0.3)]">
+                <Plus size={32} className="text-[#0B0F0C]" />
+              </button>
+            </motion.div>
+          )}
+
+          {activeTab === 'lowkey' && (
+            <motion.div 
+              key="lowkey"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="h-full min-h-[300px] flex flex-col items-center justify-center text-center px-8"
+            >
+              <p className="text-[#8E9A92] text-[15px] leading-relaxed max-w-xs border border-white/5 bg-white/5 p-6 rounded-[20px] backdrop-blur-sm">
+                Your private replies and encrypted threads live here.
+              </p>
+            </motion.div>
+          )}
+
+          {activeTab === 'profile' && (
+            <motion.div 
+              key="profile"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="h-full min-h-[300px] flex flex-col items-center justify-center text-center px-8"
+            >
+              <p className="text-[#8E9A92] text-[15px] leading-relaxed max-w-xs border border-white/5 bg-white/5 p-6 rounded-[20px] backdrop-blur-sm">
+                Anonymous profile and frequency history.
+              </p>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.div>
 
       {/* Bottom Nav */}
@@ -337,7 +506,7 @@ const DashboardScreen = ({ frequency }: { frequency: typeof FREQUENCIES[0] }) =>
         initial={{ y: 100 }}
         animate={{ y: 0 }}
         transition={{ type: 'spring', damping: 22, stiffness: 100, delay: 0.4 }}
-        className="relative z-20 bg-[#0B0F0C]/80 backdrop-blur-xl border-t border-white/10 pb-[env(safe-area-inset-bottom)]"
+        className="relative z-20 bg-[#0B0F0C] border-t border-white/10 pb-[env(safe-area-inset-bottom)] shrink-0"
       >
         <div className="flex justify-around items-center px-4 py-3">
           {tabs.map(tab => {

@@ -702,19 +702,49 @@ const DashboardScreen = ({
             </motion.div>
           )}
 
-          {activeTab === 'profile' && (
-            <motion.div
-              key="profile"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="h-full min-h-[300px] flex flex-col items-center justify-center text-center px-8"
-            >
-              <p className="text-[#8E9A92] text-[15px] leading-relaxed max-w-xs border border-white/5 bg-white/5 p-6 rounded-[20px] backdrop-blur-sm">
-                Anonymous profile and frequency history.
-              </p>
-            </motion.div>
-          )}
+                {activeTab === 'profile' && (
+        <motion.div
+          key="profile"
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.95 }}
+          className="h-full min-h-[300px] flex flex-col items-center justify-center text-center px-8"
+        >
+          <div className="w-full max-w-md bg-[#121A15] border border-[#1E3A27] rounded-[20px] p-6 backdrop-blur-sm relative overflow-hidden">
+            <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-[#2ECC71]/30 to-transparent" />
+            
+            <div className="w-16 h-16 rounded-full bg-[#1E3A27] flex items-center justify-center mx-auto mb-4 border border-[#2ECC71]/20">
+              <User size={32} className="text-[#2ECC71]" />
+            </div>
+
+            <h3 className="text-white font-mono text-[18px] font-bold tracking-wider mb-1">
+              {userIdentity}
+            </h3>
+            <p className="text-[#8E9A92] text-[12px] uppercase tracking-widest mb-6">
+              Secure Cipher Node
+            </p>
+
+            <div className="grid grid-cols-2 gap-3 text-left">
+              <div className="bg-[#0B0F0C] p-3 rounded-[12px] border border-white/5">
+                <span className="text-[#8E9A92] text-[11px] block mb-1">Frequencies</span>
+                <span className="text-white font-bold text-[16px] font-mono">1 Active</span>
+              </div>
+              <div className="bg-[#0B0F0C] p-3 rounded-[12px] border border-white/5">
+                <span className="text-[#8E9A92] text-[11px] block mb-1">Total Spills</span>
+                <span className="text-[#2ECC71] font-bold text-[16px] font-mono">{userTotalSpillsCount}</span>
+              </div>
+            </div>
+
+            <div className="mt-4 p-3 bg-[#0B0F0C] rounded-[12px] border border-white/5 text-left flex items-center gap-3">
+              <div className="w-2 h-2 rounded-full bg-[#2ECC71] animate-pulse" />
+              <span className="text-[#8E9A92] text-[12px] font-mono truncate">
+                Zero-Knowledge Session Active
+              </span>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
         </AnimatePresence>
       </motion.div>
 

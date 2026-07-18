@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Layers, Droplets, MessageCircle, User, X, Send, Lock, ArrowLeft, Home } from 'lucide-react';
+import { Layers, Droplets, MessageCircle, User, X, Send, Lock, ArrowLeft, Home, Mic, Film } from 'lucide-react';
 
 export interface ChatMessage {
   sender: string;
   message: string;
   timestamp: Date;
+  isVoice?: boolean;
+  isVideo?: boolean;
 }
 
 export interface LowkeyThread {
@@ -21,6 +23,8 @@ export interface SpillCardData {
   timeAgo: string;
   text: string;
   parentFrequencyId: string;
+  hasVoiceNote?: boolean;
+  hasPixelVideo?: boolean;
 }
 
 const adjectives = ["Shadow", "Ghost", "Cypress", "Mint", "Echo", "Lunar", "Sage", "Amber"];
@@ -277,6 +281,18 @@ const SpillCard = ({
 
       {/* Content */}
       <div className="mb-4">
+        {item.hasVoiceNote && (
+          <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-[10px] bg-orange-500/10 border border-orange-500/20 w-fit">
+            <Mic size={13} className="text-orange-400 shrink-0" />
+            <span className="text-orange-300 text-[12px] font-medium">Voice Note Attached</span>
+          </div>
+        )}
+        {item.hasPixelVideo && (
+          <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-[10px] bg-cyan-500/10 border border-cyan-500/20 w-fit">
+            <Film size={13} className="text-cyan-400 shrink-0" />
+            <span className="text-cyan-300 text-[12px] font-medium">Pixelated Video Attached</span>
+          </div>
+        )}
         <p className="text-white text-[15px] leading-[1.4] whitespace-pre-wrap">{item.text}</p>
       </div>
 
@@ -321,6 +337,8 @@ const DashboardScreen = ({
 
   const [isSpillSheetOpen, setIsSpillSheetOpen] = useState(false);
   const [spillText, setSpillText] = useState('');
+  const [attachVoiceMock, setAttachVoiceMock] = useState(false);
+  const [attachVideoMock, setAttachVideoMock] = useState(false);
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error'; bgColor?: string } | null>(null);
 
   const [privateThreads, setPrivateThreads] = useState<LowkeyThread[]>([]);
@@ -338,13 +356,15 @@ const DashboardScreen = ({
   };
 
   const _dispatchNewTransmission = () => {
-    if (!spillText.trim()) return;
+    if (!spillText.trim() && !attachVoiceMock && !attachVideoMock) return;
     const newCard: SpillCardData = {
       id: Date.now().toString(),
       author: userIdentity,
       timeAgo: 'Just Now',
-      text: spillText.trim(),
+      text: spillText.trim() || 'Sent an encrypted telemetry package.',
       parentFrequencyId: homeFrequency.id,
+      hasVoiceNote: attachVoiceMock,
+      hasPixelVideo: attachVideoMock,
     };
 
     // Always post to home frequency regardless of what's being monitored
@@ -354,12 +374,14 @@ const DashboardScreen = ({
     }));
     setUserTotalSpillsCount(prev => prev + 1);
     setSpillText('');
+    setAttachVoiceMock(false);
+    setAttachVideoMock(false);
     setIsSpillSheetOpen(false);
     // Snap back to home frequency feed
     setCurrentMonitoredFrequency(homeFrequency);
     setActiveTab('feeds');
 
-    showToast(`Spill routed directly to your home feed (${homeFrequency.name})!`, 'success', homeFrequency.textColor);
+    showToast(`Spill routed securely to home feed (${homeFrequency.name})!`, 'success', homeFrequency.textColor);
   };
 
   const handleReplyClick = (card: SpillCardData) => {
@@ -378,8 +400,6 @@ const DashboardScreen = ({
       targetPostAuthor: lowkeyTargetCard.author,
       originalSnippet: lowkeyTargetCard.text,
       messages: [
-        { sender: lowkeyTargetCard.author, message: 'This is bad', timestamp: new Date() },
-        { sender: lowkeyTargetCard.author, message: 'Is it true', timestamp: new Date() },
         { sender: userIdentity, message: chatText.trim(), timestamp: new Date() },
       ],
     };
@@ -577,7 +597,19 @@ const DashboardScreen = ({
                             className={`px-4 py-3 mb-3 text-[15px] text-white leading-relaxed border ${isMe ? 'bg-[#122216] border-[#1E3A27]' : 'bg-[#1A1212] border-[#3A1E1E]'}`}
                             style={{ borderRadius: isMe ? '16px 16px 2px 16px' : '16px 16px 16px 2px' }}
                           >
-                            {msg.message}
+                            {msg.isVoice ? (
+                              <div className="flex items-center gap-2">
+                                <Mic size={15} className="text-orange-400 shrink-0" />
+                                <span className="text-orange-300 text-[14px]">Voice Whisper Playback</span>
+                              </div>
+                            ) : msg.isVideo ? (
+                              <div className="flex items-center gap-2">
+                                <Film size={15} className="text-cyan-400 shrink-0" />
+                                <span className="text-cyan-300 text-[14px]">Pixelated Video Feed</span>
+                              </div>
+                            ) : (
+                              msg.message
+                            )}
                           </div>
                         </div>
                       );
@@ -587,6 +619,30 @@ const DashboardScreen = ({
                   {/* Input Bar */}
                   <div className="p-3 border-t border-white/5 bg-[#0B0F0C] shrink-0">
                     <div className="flex items-end gap-2 bg-white/5 rounded-[24px] px-2 py-1.5 focus-within:ring-1 focus-within:ring-white/10 transition-shadow">
+                      <button
+                        onClick={() => {
+                          const voiceMsg: ChatMessage = { sender: userIdentity, message: 'Voice Note', timestamp: new Date(), isVoice: true };
+                          const updated = { ...activeChatThread!, messages: [...activeChatThread!.messages, voiceMsg] };
+                          setPrivateThreads(prev => prev.map(t => t.id === updated.id ? updated : t));
+                          setActiveChatThread(updated);
+                        }}
+                        className="p-2 shrink-0 text-orange-400 hover:opacity-80 transition-opacity active:scale-95"
+                        title="Send Voice Whisper"
+                      >
+                        <Mic size={18} />
+                      </button>
+                      <button
+                        onClick={() => {
+                          const videoMsg: ChatMessage = { sender: userIdentity, message: 'Pixel Video', timestamp: new Date(), isVideo: true };
+                          const updated = { ...activeChatThread!, messages: [...activeChatThread!.messages, videoMsg] };
+                          setPrivateThreads(prev => prev.map(t => t.id === updated.id ? updated : t));
+                          setActiveChatThread(updated);
+                        }}
+                        className="p-2 shrink-0 text-cyan-400 hover:opacity-80 transition-opacity active:scale-95"
+                        title="Send Pixel Video"
+                      >
+                        <Film size={18} />
+                      </button>
                       <textarea
                         value={innerChatText}
                         onChange={e => setInnerChatText(e.target.value)}
@@ -746,7 +802,33 @@ const DashboardScreen = ({
                 className="w-full bg-black/30 rounded-[12px] p-4 text-white text-[16px] placeholder:text-white/30 outline-none resize-none focus:ring-1 focus:ring-white/10"
               />
 
-              <div className="h-5" />
+              {/* Voice / Video toggles */}
+              <div className="flex gap-3 mt-4 mb-5">
+                <button
+                  onClick={() => setAttachVoiceMock(v => !v)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-full text-[13px] font-semibold border transition-all duration-200 active:scale-95`}
+                  style={
+                    attachVoiceMock
+                      ? { backgroundColor: 'rgba(251,146,60,0.15)', borderColor: 'rgba(251,146,60,0.6)', color: 'rgb(251,146,60)' }
+                      : { backgroundColor: 'transparent', borderColor: 'rgba(255,255,255,0.15)', color: '#8E9A92' }
+                  }
+                >
+                  <Mic size={14} />
+                  {attachVoiceMock ? 'Voice Attached' : 'Attach Voice'}
+                </button>
+                <button
+                  onClick={() => setAttachVideoMock(v => !v)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-full text-[13px] font-semibold border transition-all duration-200 active:scale-95`}
+                  style={
+                    attachVideoMock
+                      ? { backgroundColor: 'rgba(34,211,238,0.12)', borderColor: 'rgba(34,211,238,0.5)', color: 'rgb(34,211,238)' }
+                      : { backgroundColor: 'transparent', borderColor: 'rgba(255,255,255,0.15)', color: '#8E9A92' }
+                  }
+                >
+                  <Film size={14} />
+                  {attachVideoMock ? 'Video Attached' : 'Attach Video'}
+                </button>
+              </div>
 
               <button
                 onClick={_dispatchNewTransmission}

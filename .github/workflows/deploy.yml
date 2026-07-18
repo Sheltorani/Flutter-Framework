@@ -24,20 +24,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+          
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: 'pnpm'
+          cache-dependency-path: artifacts/cipher/package.json
           
       - name: Install dependencies
         run: |
           cd artifacts/cipher
-          npm install
+          pnpm install --no-frozen-lockfile
           
       - name: Build Code
         run: |
           cd artifacts/cipher
-          npm run build
+          pnpm run build
           
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
@@ -47,4 +54,3 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-        

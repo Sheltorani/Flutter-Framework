@@ -381,16 +381,12 @@ const DashboardScreen = ({
     setCurrentMonitoredFrequency(homeFrequency);
     setActiveTab('feeds');
 
-    showToast(`Spill routed securely to home feed (${homeFrequency.name})!`, 'success', homeFrequency.textColor);
   };
 
   const handleReplyClick = (card: SpillCardData) => {
-    if (card.author === userIdentity) {
-      showToast('You cannot build a private room with yourself.', 'error');
-    } else {
-      setLowkeyTargetCard(card);
-      setIsLowkeySheetOpen(true);
-    }
+    if (card.author === userIdentity) return;
+    setLowkeyTargetCard(card);
+    setIsLowkeySheetOpen(true);
   };
 
   const _dispatchNewThread = () => {
@@ -567,7 +563,7 @@ const DashboardScreen = ({
                       <ArrowLeft size={20} />
                     </button>
                     <div className="flex-1 flex flex-col">
-                      <span className="font-bold text-[16px]" style={{ color: homeFrequency.textColor }}>
+                      <span className="font-bold text-[16px] text-[#2ECC71]">
                         {activeChatThread.targetPostAuthor}
                       </span>
                       <span className="text-[#8E9A92] text-[11px] uppercase tracking-wider mt-0.5">
@@ -594,18 +590,18 @@ const DashboardScreen = ({
                       return (
                         <div key={idx} className={`max-w-[75%] flex flex-col ${isMe ? 'self-end' : 'self-start'}`}>
                           <div
-                            className={`px-4 py-3 mb-3 text-[15px] text-white leading-relaxed border ${isMe ? 'bg-[#122216] border-[#1E3A27]' : 'bg-[#1A1212] border-[#3A1E1E]'}`}
+                            className={`px-4 py-3 mb-3 text-[15px] text-white leading-relaxed border ${isMe ? 'bg-[#122216] border-[#1E3A27]' : 'bg-[#1E1E1E] border-white/10'}`}
                             style={{ borderRadius: isMe ? '16px 16px 2px 16px' : '16px 16px 16px 2px' }}
                           >
                             {msg.isVoice ? (
                               <div className="flex items-center gap-2">
                                 <Mic size={15} className="text-orange-400 shrink-0" />
-                                <span className="text-orange-300 text-[14px]">Voice Whisper Playback</span>
+                                <span className="text-orange-400 text-[14px] font-bold">Voice Whisper Playback</span>
                               </div>
                             ) : msg.isVideo ? (
                               <div className="flex items-center gap-2">
                                 <Film size={15} className="text-cyan-400 shrink-0" />
-                                <span className="text-cyan-300 text-[14px]">Pixelated Video Feed</span>
+                                <span className="text-cyan-400 text-[14px] font-bold">Pixelated Video Feed</span>
                               </div>
                             ) : (
                               msg.message

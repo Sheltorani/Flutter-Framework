@@ -28,7 +28,8 @@ if (!basePath) {
 }
 
 export default defineConfig({
-  base: basePath,
+  base: '/Flutter-Framework/',
+
   plugins: [
     react(),
     tailwindcss(),

@@ -173,7 +173,7 @@ const DashboardScreen = ({ homeFrequency, userIdentity }: { homeFrequency: Frequ
   // Target collection explicitly as 'Spills' matching database case state
   useEffect(() => {
     const q = query(
-      collection(db, 'Spills'),
+      collection(db, 'spills'),
       where('parentFrequencyId', '==', currentMonitoredFrequency.id),
       orderBy('createdAt', 'desc')
     );
@@ -203,7 +203,7 @@ const DashboardScreen = ({ homeFrequency, userIdentity }: { homeFrequency: Frequ
   const handlePublishSpill = async () => {
     if (!spillText.trim()) return;
     try {
-      await addDoc(collection(db, 'Spills'), {
+      await addDoc(collection(db, 'spills'), {
         author: userIdentity,
         text: spillText.trim(),
         parentFrequencyId: currentMonitoredFrequency.id,

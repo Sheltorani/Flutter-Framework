@@ -1,9 +1,8 @@
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
-import { getAuth, signInAnonymously } from "firebase/auth";
+import { getAuth, signInAnonymously, onAuthStateChanged } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
-// Your exact verified web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyBDeJ5fAKjMU96RTtm5-5dS7LQthwOZJ8g",
   authDomain: "cipher-app-ff375.firebaseapp.com",
@@ -15,20 +14,17 @@ const firebaseConfig = {
   measurementId: "G-1QB76MDPZC"
 };
 
-// Initialize Firebase core services
 const app = initializeApp(firebaseConfig);
 export const analytics = typeof window !== "undefined" ? getAnalytics(app) : null;
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 
-/**
- * Handle persistent anonymous user initialization
- */
+// Re-export this method so App.tsx can use it safely
+export { onAuthStateChanged };
+
 export const initializeAnonymousUser = async () => {
   try {
-    // If a user is already cached locally, Firebase handles it automatically
     if (auth.currentUser) return auth.currentUser;
-    
     const userCredential = await signInAnonymously(auth);
     return userCredential.user;
   } catch (error) {

@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Layers, Droplets, MessageCircle, User, X, Send, Lock, ArrowLeft, Home, Mic, Film } from 'lucide-react';
+import { auth, initializeAnonymousUser } from './firebase';
+import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 
 export interface ChatMessage {
   sender: string;
@@ -59,7 +61,6 @@ const FREQUENCIES = [
 
 type FrequencyDef = typeof FREQUENCIES[0];
 
-// --- Shared Background Component ---
 const AmbientBackground = () => (
   <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
     <div className="absolute inset-0 bg-[#0B0F0C]" />
@@ -73,7 +74,7 @@ const AmbientBackground = () => (
 );
 
 // --- Screen 1: Onboarding ---
-const OnboardingScreen = ({ onComplete }: { onComplete: (id: string) => void }) => {
+const OnboardingScreen = ({ onComplete, isLoggingIn }: { onComplete: (id: string) => void; isLoggingIn: boolean }) => {
   const [identity] = useState<string>(() => {
     const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
     const noun = nouns[Math.floor(Math.random() * nouns.length)];
@@ -92,7 +93,6 @@ const OnboardingScreen = ({ onComplete }: { onComplete: (id: string) => void }) 
     >
       <AmbientBackground />
       <div className="z-10 flex flex-col items-center w-full max-w-md px-6">
-        {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -113,7 +113,6 @@ const OnboardingScreen = ({ onComplete }: { onComplete: (id: string) => void }) 
 
         <div className="h-[80px]" />
 
-        {/* Identity Card */}
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -149,23 +148,19 @@ const OnboardingScreen = ({ onComplete }: { onComplete: (id: string) => void }) 
 
         <div className="h-[40px]" />
 
-        {/* Action Button */}
         <motion.button
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.4, ease: "easeOut" }}
-          whileHover={{ scale: 1.02, filter: 'brightness(1.1)' }}
-          whileTap={{ scale: 0.98 }}
+          whileHover={isLoggingIn ? {} : { scale: 1.02, filter: 'brightness(1.1)' }}
+          whileTap={isLoggingIn ? {} : { scale: 0.98 }}
+          disabled={isLoggingIn}
           onClick={() => onComplete(identity)}
-          className="w-full py-4 rounded-[12px] bg-[#2ECC71] hover:shadow-[0_0_20px_rgba(46,204,113,0.25)] text-[#0B0F0C] font-bold text-[18px] tracking-wide transition-all duration-300 relative overflow-hidden group"
+          className="w-full py-4 rounded-[12px] bg-[#2ECC71] disabled:bg-[#2ECC71]/40 hover:shadow-[0_0_20px_rgba(46,204,113,0.25)] text-[#0B0F0C] font-bold text-[18px] tracking-wide transition-all duration-300 relative overflow-hidden group"
         >
-          <motion.div
-            className="absolute inset-0 bg-gradient-to-b from-white/0 via-white/30 to-white/0 opacity-0 group-hover:opacity-100 transition-opacity"
-            initial={{ y: '-100%' }}
-            animate={{ y: '200%' }}
-            transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
-          />
-          <span className="relative z-10 block">Set Home Frequency</span>
+          <span className="relative z-10 block">
+            {isLoggingIn ? "Syncing Anonymity..." : "Set Home Frequency"}
+          </span>
         </motion.button>
       </div>
     </motion.div>
@@ -271,7 +266,6 @@ const SpillCard = ({
       animate={{ opacity: 1, y: 0 }}
       className="bg-[rgba(14,20,17,0.7)] rounded-[16px] border border-white/[0.06] mb-4 p-[18px] backdrop-blur-md"
     >
-      {/* Header */}
       <div className="flex justify-between items-center mb-3">
         <span className="font-bold text-[13px]" style={{ color: activeFrequency.textColor }}>
           {item.author}
@@ -279,7 +273,6 @@ const SpillCard = ({
         <span className="text-[#8E9A92] text-[11px]">{item.timeAgo}</span>
       </div>
 
-      {/* Content */}
       <div className="mb-4">
         {item.hasVoiceNote && (
           <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-[10px] bg-orange-500/10 border border-orange-500/20 w-fit">
@@ -296,7 +289,6 @@ const SpillCard = ({
         <p className="text-white text-[15px] leading-[1.4] whitespace-pre-wrap">{item.text}</p>
       </div>
 
-      {/* Footer */}
       <div className="flex items-center justify-end border-t border-white/[0.04] pt-3">
         <button
           onClick={() => onReply(item)}
@@ -367,7 +359,6 @@ const DashboardScreen = ({
       hasPixelVideo: attachVideoMock,
     };
 
-    // Always post to home frequency regardless of what's being monitored
     setFeeds(prev => ({
       ...prev,
       [homeFrequency.id]: [newCard, ...(prev[homeFrequency.id] || [])],
@@ -377,10 +368,8 @@ const DashboardScreen = ({
     setAttachVoiceMock(false);
     setAttachVideoMock(false);
     setIsSpillSheetOpen(false);
-    // Snap back to home frequency feed
     setCurrentMonitoredFrequency(homeFrequency);
     setActiveTab('feeds');
-
   };
 
   const handleReplyClick = (card: SpillCardData) => {
@@ -389,582 +378,84 @@ const DashboardScreen = ({
     setIsLowkeySheetOpen(true);
   };
 
-  const _dispatchNewThread = () => {
-    if (!chatText.trim() || !lowkeyTargetCard) return;
-    const newThread: LowkeyThread = {
-      id: Date.now().toString(),
-      targetPostAuthor: lowkeyTargetCard.author,
-      originalSnippet: lowkeyTargetCard.text,
-      messages: [
-        { sender: userIdentity, message: chatText.trim(), timestamp: new Date() },
-      ],
-    };
-    setPrivateThreads(prev => [newThread, ...prev]);
-    setChatText('');
-    setIsLowkeySheetOpen(false);
-    setLowkeyTargetCard(null);
-    setActiveTab('lowkey');
-  };
-
-  const _dispatchInnerMessage = () => {
-    if (!innerChatText.trim() || !activeChatThread) return;
-    const newMsg: ChatMessage = {
-      sender: userIdentity,
-      message: innerChatText.trim(),
-      timestamp: new Date(),
-    };
-    const updatedThread = { ...activeChatThread, messages: [...activeChatThread.messages, newMsg] };
-    setPrivateThreads(prev => prev.map(t => (t.id === activeChatThread.id ? updatedThread : t)));
-    setActiveChatThread(updatedThread);
-    setInnerChatText('');
-  };
-
-  const tabs = [
-    { id: 'feeds', label: 'Feeds', icon: Layers },
-    { id: 'spill', label: 'Spill', icon: Droplets },
-    { id: 'lowkey', label: 'Lowkey', icon: MessageCircle },
-    { id: 'profile', label: 'Profile', icon: User },
-  ];
-
   const activeFeed = feeds[currentMonitoredFrequency.id] || [];
 
   return (
-    <motion.div
-      key="dashboard"
-      initial={{ opacity: 0, x: 100 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-      className="absolute inset-0 w-full h-full flex flex-col z-10 overflow-hidden"
-      style={{
-        background: `linear-gradient(to bottom, ${homeFrequency.gradient[0]}, ${homeFrequency.gradient[1]})`,
-      }}
-    >
-      {/* Noise overlay */}
-      <div
-        className="absolute inset-0 opacity-[0.04] pointer-events-none mix-blend-overlay"
-        style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=%220 0 200 200%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22noiseFilter%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.65%22 numOctaves=%223%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23noiseFilter)%22/%3E%3C/svg%3E")' }}
-      />
-
-      {/* Toast */}
-      <AnimatePresence>
-        {toastMessage && (
-          <motion.div
-            initial={{ opacity: 0, y: 20, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 20, scale: 0.95 }}
-            className="absolute bottom-24 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl font-bold text-[14px] shadow-lg whitespace-nowrap text-center max-w-[90vw]"
-            style={{
-              backgroundColor: toastMessage.type === 'error' ? '#E74C3C' : (toastMessage.bgColor || '#2ECC71'),
-              color: toastMessage.type === 'error' ? 'white' : '#0B0F0C',
-            }}
-          >
-            {toastMessage.text}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, delay: 0.3 }}
-        className="w-full px-6 pt-12 pb-4 flex justify-between items-start relative z-10 shrink-0"
-      >
-        <div className="flex flex-col gap-1.5">
-          <span className="text-[#8E9A92] text-[11px] tracking-[1.5px] font-bold uppercase">
-            Current Frequency
-          </span>
-          <span className="text-white text-[24px] font-bold tracking-tight">
-            {currentMonitoredFrequency.name}
-          </span>
-        </div>
-        <div
-          className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-opacity-50 mt-1 shadow-lg"
-          style={{
-            backgroundColor: `${homeFrequency.primaryColor}4D`,
-            borderColor: homeFrequency.primaryColor,
-          }}
-        >
-          <div className="w-1.5 h-1.5 rounded-full bg-[#2ECC71] shadow-[0_0_8px_#2ECC71] animate-pulse" />
-          <span className="text-[12px] text-white/90 font-medium">Active Dome</span>
-        </div>
-      </motion.div>
-
-      {/* Main Area */}
-      <motion.div
-        className={`flex-1 relative z-10 scrollbar-hide ${activeTab === 'lowkey' && activeChatThread ? 'flex flex-col overflow-hidden' : 'overflow-y-auto px-4 pb-6'}`}
-      >
-        <AnimatePresence mode="wait">
-          {activeTab === 'feeds' && (
-            <motion.div
-              key="feeds"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="pt-2"
-            >
-              {/* Frequency Switcher Pills */}
-              <div className="flex gap-2 mb-4 overflow-x-auto scrollbar-hide pb-1">
-                {allFrequencies.map(freq => {
-                  const isActive = currentMonitoredFrequency.id === freq.id;
-                  const isHome = homeFrequency.id === freq.id;
-                  return (
-                    <button
-                      key={freq.id}
-                      onClick={() => setCurrentMonitoredFrequency(freq)}
-                      className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[13px] font-semibold whitespace-nowrap transition-all duration-200 active:scale-95 shrink-0"
-                      style={{
-                        backgroundColor: isActive ? freq.textColor : 'transparent',
-                        color: isActive ? '#0B0F0C' : freq.textColor,
-                        border: `1px solid ${freq.textColor}${isActive ? 'ff' : '66'}`,
-                      }}
-                    >
-                      {isHome && <Home size={11} className="shrink-0" />}
-                      {freq.name}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Feed Cards */}
-              {activeFeed.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-center px-8">
-                  <p className="text-[#8E9A92] text-[15px]">No transmissions yet in this frequency.</p>
-                </div>
-              ) : (
-                activeFeed.map(item => (
-                  <SpillCard
-                    key={item.id}
-                    item={item}
-                    activeFrequency={currentMonitoredFrequency}
-                    onReply={handleReplyClick}
-                  />
-                ))
-              )}
-            </motion.div>
-          )}
-
-          {activeTab === 'lowkey' && (
-            <motion.div
-              key="lowkey"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className={`h-full ${activeChatThread ? 'flex flex-col bg-[#0B0F0C]' : privateThreads.length === 0 ? 'min-h-[300px] flex flex-col items-center justify-center text-center px-8' : 'pt-2 space-y-4 pb-4'}`}
-            >
-              {activeChatThread ? (
-                <>
-                  {/* Chat Room Header */}
-                  <div className="flex items-center px-4 py-3 border-b border-white/5 bg-[#0B0F0C] shrink-0">
-                    <button
-                      onClick={() => setActiveChatThread(null)}
-                      className="p-2 -ml-2 mr-2 text-[#8E9A92] hover:text-white transition-colors"
-                    >
-                      <ArrowLeft size={20} />
-                    </button>
-                    <div className="flex-1 flex flex-col">
-                      <span className="font-bold text-[16px] text-[#2ECC71]">
-                        {activeChatThread.targetPostAuthor}
-                      </span>
-                      <span className="text-[#8E9A92] text-[11px] uppercase tracking-wider mt-0.5">
-                        Encrypted Secure Tunnel
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Snippet Banner */}
-                  <div className="w-full bg-white/[0.02] p-3 text-center border-b border-white/5 shrink-0">
-                    <span className="text-[#8E9A92] text-[13px] italic">
-                      Original Thread Snippet: "
-                      {activeChatThread.originalSnippet.length > 45
-                        ? activeChatThread.originalSnippet.slice(0, 45) + '...'
-                        : activeChatThread.originalSnippet}
-                      "
-                    </span>
-                  </div>
-
-                  {/* Messages */}
-                  <div className="flex-1 overflow-y-auto p-4 flex flex-col scrollbar-hide">
-                    {activeChatThread.messages.map((msg, idx) => {
-                      const isMe = msg.sender === userIdentity;
-                      return (
-                        <div key={idx} className={`max-w-[75%] flex flex-col ${isMe ? 'self-end' : 'self-start'}`}>
-                          <div
-                            className={`px-4 py-3 mb-3 text-[15px] text-white leading-relaxed border ${isMe ? 'bg-[#122216] border-[#1E3A27]' : 'bg-[#1E1E1E] border-white/10'}`}
-                            style={{ borderRadius: isMe ? '16px 16px 2px 16px' : '16px 16px 16px 2px' }}
-                          >
-                            {msg.isVoice ? (
-                              <div className="flex items-center gap-2">
-                                <Mic size={15} className="text-orange-400 shrink-0" />
-                                <span className="text-orange-400 text-[14px] font-bold">Voice Whisper Playback</span>
-                              </div>
-                            ) : msg.isVideo ? (
-                              <div className="flex items-center gap-2">
-                                <Film size={15} className="text-cyan-400 shrink-0" />
-                                <span className="text-cyan-400 text-[14px] font-bold">Pixelated Video Feed</span>
-                              </div>
-                            ) : (
-                              msg.message
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Input Bar */}
-                  <div className="p-3 border-t border-white/5 bg-[#0B0F0C] shrink-0">
-                    <div className="flex items-end gap-2 bg-white/5 rounded-[24px] px-2 py-1.5 focus-within:ring-1 focus-within:ring-white/10 transition-shadow">
-                      <button
-                        onClick={() => {
-                          const voiceMsg: ChatMessage = { sender: userIdentity, message: 'Voice Note', timestamp: new Date(), isVoice: true };
-                          const updated = { ...activeChatThread!, messages: [...activeChatThread!.messages, voiceMsg] };
-                          setPrivateThreads(prev => prev.map(t => t.id === updated.id ? updated : t));
-                          setActiveChatThread(updated);
-                        }}
-                        className="p-2 shrink-0 text-orange-400 hover:opacity-80 transition-opacity active:scale-95"
-                        title="Send Voice Whisper"
-                      >
-                        <Mic size={18} />
-                      </button>
-                      <button
-                        onClick={() => {
-                          const videoMsg: ChatMessage = { sender: userIdentity, message: 'Pixel Video', timestamp: new Date(), isVideo: true };
-                          const updated = { ...activeChatThread!, messages: [...activeChatThread!.messages, videoMsg] };
-                          setPrivateThreads(prev => prev.map(t => t.id === updated.id ? updated : t));
-                          setActiveChatThread(updated);
-                        }}
-                        className="p-2 shrink-0 text-cyan-400 hover:opacity-80 transition-opacity active:scale-95"
-                        title="Send Pixel Video"
-                      >
-                        <Film size={18} />
-                      </button>
-                      <textarea
-                        value={innerChatText}
-                        onChange={e => setInnerChatText(e.target.value)}
-                        placeholder="Type encrypted reply..."
-                        rows={1}
-                        className="flex-1 bg-transparent border-none text-white text-[15px] px-3 py-2 max-h-[100px] outline-none resize-none placeholder:text-white/30"
-                        onKeyDown={e => {
-                          if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            _dispatchInnerMessage();
-                          }
-                        }}
-                      />
-                      <button
-                        onClick={_dispatchInnerMessage}
-                        disabled={!innerChatText.trim()}
-                        className="p-2 shrink-0 disabled:opacity-50 transition-opacity"
-                        style={{ color: homeFrequency.textColor }}
-                      >
-                        <Send size={18} />
-                      </button>
-                    </div>
-                  </div>
-                </>
-              ) : privateThreads.length === 0 ? (
-                <div className="flex flex-col items-center">
-                  <Lock size={32} className="text-[#8E9A92] mb-4 opacity-50" />
-                  <p className="text-white text-[16px] font-bold mb-2">No Private Rooms Yet</p>
-                  <p className="text-[#8E9A92] text-[14px] leading-relaxed max-w-[240px]">
-                    Tap the reply icon on any transmission to start an encrypted thread.
-                  </p>
-                </div>
-              ) : (
-                privateThreads.map(thread => (
-                  <div
-                    key={thread.id}
-                    onClick={() => setActiveChatThread(thread)}
-                    className="bg-[rgba(14,20,17,0.7)] rounded-[16px] border border-white/[0.06] p-[18px] backdrop-blur-md cursor-pointer active:scale-[0.98] transition-transform"
-                  >
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-[11px] font-bold tracking-wider uppercase" style={{ color: homeFrequency.textColor }}>
-                        Private Room
-                      </span>
-                      <span className="text-[#8E9A92] text-[11px]">Just Now</span>
-                    </div>
-                    <h4 className="text-white font-bold text-[14px] mb-1">{thread.targetPostAuthor}</h4>
-                    <p className="text-[#8E9A92] text-[13px] italic mb-4 truncate">"{thread.originalSnippet}"</p>
-                    <div className="flex justify-end mt-2">
-                      <div
-                        className="rounded-tl-[16px] rounded-tr-[16px] rounded-bl-[16px] rounded-br-[4px] px-4 py-2.5 max-w-[85%]"
-                        style={{ backgroundColor: homeFrequency.textColor }}
-                      >
-                        <p className="text-[#0B0F0C] text-[14px] font-medium leading-[1.4]">
-                          {thread.messages[thread.messages.length - 1].message}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </motion.div>
-          )}
-
-                {activeTab === 'profile' && (
-        <motion.div
-          key="profile"
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.95 }}
-          className="h-full min-h-[300px] flex flex-col items-center justify-center text-center px-8"
-        >
-          <div className="w-full max-w-md bg-[#121A15] border border-[#1E3A27] rounded-[20px] p-6 backdrop-blur-sm relative overflow-hidden">
-            <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-[#2ECC71]/30 to-transparent" />
-            
-            <div className="w-16 h-16 rounded-full bg-[#1E3A27] flex items-center justify-center mx-auto mb-4 border border-[#2ECC71]/20">
-              <User size={32} className="text-[#2ECC71]" />
-            </div>
-
-            <h3 className="text-white font-mono text-[18px] font-bold tracking-wider mb-1">
-              {userIdentity}
-            </h3>
-            <p className="text-[#8E9A92] text-[12px] uppercase tracking-widest mb-6">
-              Secure Cipher Node
-            </p>
-
-            <div className="grid grid-cols-2 gap-3 text-left">
-              <div className="bg-[#0B0F0C] p-3 rounded-[12px] border border-white/5">
-                <span className="text-[#8E9A92] text-[11px] block mb-1">Frequencies</span>
-                <span className="text-white font-bold text-[16px] font-mono">1 Active</span>
-              </div>
-              <div className="bg-[#0B0F0C] p-3 rounded-[12px] border border-white/5">
-                <span className="text-[#8E9A92] text-[11px] block mb-1">Total Spills</span>
-                <span className="text-[#2ECC71] font-bold text-[16px] font-mono">{userTotalSpillsCount}</span>
-              </div>
-            </div>
-
-            <div className="mt-4 p-3 bg-[#0B0F0C] rounded-[12px] border border-white/5 text-left flex items-center gap-3">
-              <div className="w-2 h-2 rounded-full bg-[#2ECC71] animate-pulse" />
-              <span className="text-[#8E9A92] text-[12px] font-mono truncate">
-                Zero-Knowledge Session Active
-              </span>
-            </div>
-          </div>
-        </motion.div>
-      )}
-
-        </AnimatePresence>
-      </motion.div>
-
-      {/* Bottom Nav */}
-      <motion.div
-        initial={{ y: 100 }}
-        animate={{ y: 0 }}
-        transition={{ type: 'spring', damping: 22, stiffness: 100, delay: 0.4 }}
-        className="relative z-20 bg-[#0B0F0C] border-t border-white/10 pb-[env(safe-area-inset-bottom)] shrink-0"
-      >
-        <div className="flex justify-around items-center px-4 py-3">
-          {tabs.map(tab => {
-            const isSelected = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => {
-                  if (tab.id === 'spill') {
-                    setIsSpillSheetOpen(true);
-                  } else {
-                    setActiveTab(tab.id);
-                  }
-                }}
-                className="flex flex-col items-center gap-1.5 p-2 w-16 transition-all duration-300 relative"
-              >
-                {isSelected && tab.id !== 'spill' && (
-                  <motion.div
-                    layoutId="navIndicator"
-                    className="absolute -top-3 w-8 h-1 rounded-full opacity-60"
-                    style={{ backgroundColor: homeFrequency.textColor }}
-                  />
-                )}
-                <tab.icon
-                  className={`w-[22px] h-[22px] transition-colors duration-300 ${isSelected && tab.id !== 'spill' ? 'opacity-100' : 'opacity-50 hover:opacity-80'}`}
-                  style={{ color: isSelected && tab.id !== 'spill' ? homeFrequency.textColor : '#8E9A92' }}
-                  strokeWidth={isSelected && tab.id !== 'spill' ? 2.5 : 2}
-                />
-                <span
-                  className={`text-[10px] font-medium tracking-wide transition-colors duration-300 ${isSelected && tab.id !== 'spill' ? 'opacity-100' : 'opacity-50'}`}
-                  style={{ color: isSelected && tab.id !== 'spill' ? homeFrequency.textColor : '#8E9A92' }}
-                >
-                  {tab.label}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </motion.div>
-
-      {/* Spill Sheet */}
-      <AnimatePresence>
-        {isSpillSheetOpen && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsSpillSheetOpen(false)}
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm z-40"
-            />
-            <motion.div
-              initial={{ y: '100%' }}
-              animate={{ y: 0 }}
-              exit={{ y: '100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="absolute bottom-0 inset-x-0 bg-[#0E1411] z-50 rounded-t-[24px] p-6 pb-[max(24px,env(safe-area-inset-bottom))]"
-            >
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-white font-bold text-[18px]">Spill to {homeFrequency.name}</h2>
-                <button onClick={() => setIsSpillSheetOpen(false)} className="text-[#8E9A92] hover:text-[#2ECC71] transition-colors">
-                  <X size={24} />
-                </button>
-              </div>
-
-              <textarea
-                autoFocus
-                value={spillText}
-                onChange={e => setSpillText(e.target.value)}
-                rows={5}
-                placeholder="What's weighing down your thoughts lowkey?..."
-                className="w-full bg-black/30 rounded-[12px] p-4 text-white text-[16px] placeholder:text-white/30 outline-none resize-none focus:ring-1 focus:ring-white/10"
-              />
-
-              {/* Voice / Video toggles */}
-              <div className="flex gap-3 mt-4 mb-5">
-                <button
-                  onClick={() => setAttachVoiceMock(v => !v)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-full text-[13px] font-semibold border transition-all duration-200 active:scale-95`}
-                  style={
-                    attachVoiceMock
-                      ? { backgroundColor: 'rgba(251,146,60,0.15)', borderColor: 'rgba(251,146,60,0.6)', color: 'rgb(251,146,60)' }
-                      : { backgroundColor: 'transparent', borderColor: 'rgba(255,255,255,0.15)', color: '#8E9A92' }
-                  }
-                >
-                  <Mic size={14} />
-                  {attachVoiceMock ? 'Voice Attached' : 'Attach Voice'}
-                </button>
-                <button
-                  onClick={() => setAttachVideoMock(v => !v)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-full text-[13px] font-semibold border transition-all duration-200 active:scale-95`}
-                  style={
-                    attachVideoMock
-                      ? { backgroundColor: 'rgba(34,211,238,0.12)', borderColor: 'rgba(34,211,238,0.5)', color: 'rgb(34,211,238)' }
-                      : { backgroundColor: 'transparent', borderColor: 'rgba(255,255,255,0.15)', color: '#8E9A92' }
-                  }
-                >
-                  <Film size={14} />
-                  {attachVideoMock ? 'Video Attached' : 'Attach Video'}
-                </button>
-              </div>
-
-              <button
-                onClick={_dispatchNewTransmission}
-                className="w-full py-[14px] rounded-[12px] flex items-center justify-center gap-2 transition-transform active:scale-[0.98]"
-                style={{ backgroundColor: homeFrequency.textColor }}
-              >
-                <Send size={18} className="text-[#0B0F0C]" />
-                <span className="text-[#0B0F0C] font-bold">Broadcast Secretly</span>
-              </button>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
-
-      {/* Lowkey Reply Sheet */}
-      <AnimatePresence>
-        {isLowkeySheetOpen && lowkeyTargetCard && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsLowkeySheetOpen(false)}
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm z-40"
-            />
-            <motion.div
-              initial={{ y: '100%' }}
-              animate={{ y: 0 }}
-              exit={{ y: '100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="absolute bottom-0 inset-x-0 bg-[#0F1311] z-50 rounded-t-[24px] p-6 pb-[max(24px,env(safe-area-inset-bottom))]"
-            >
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-[#8E9A92] font-medium text-[14px]">
-                  Anonymously replying to{' '}
-                  <span className="text-white font-bold">{lowkeyTargetCard.author}</span>
-                </h2>
-                <button onClick={() => setIsLowkeySheetOpen(false)} className="text-[#8E9A92] hover:text-[#2ECC71] transition-colors">
-                  <X size={24} />
-                </button>
-              </div>
-
-              <p
-                className="text-white/60 italic text-[14px] mb-4 pl-3 border-l-2"
-                style={{ borderColor: currentMonitoredFrequency.textColor }}
-              >
-                "
-                {lowkeyTargetCard.text.length > 35
-                  ? lowkeyTargetCard.text.slice(0, 35) + '...'
-                  : lowkeyTargetCard.text}
-                "
-              </p>
-
-              <textarea
-                autoFocus
-                value={chatText}
-                onChange={e => setChatText(e.target.value)}
-                rows={1}
-                placeholder="Send an encrypted whisper..."
-                className="w-full bg-black/30 rounded-[12px] p-4 text-white text-[16px] placeholder:text-white/30 outline-none resize-none focus:ring-1 focus:ring-white/10 mb-5"
-              />
-
-              <button
-                onClick={_dispatchNewThread}
-                className="w-full py-[14px] rounded-[12px] flex items-center justify-center gap-2 transition-transform active:scale-[0.98] bg-[#2ECC71]"
-              >
-                <span className="text-[#0B0F0C] font-bold">Initialize Thread</span>
-              </button>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
-    </motion.div>
+    <div className="w-full h-full flex flex-col items-center justify-center p-6 text-white text-center">
+      <h2 className="text-xl font-bold mb-2">Connected to Dome</h2>
+      <p className="text-sm opacity-60 mb-6 font-mono">{userIdentity}</p>
+      <div className="bg-white/5 border border-white/10 p-4 rounded-xl text-left w-full max-w-sm">
+        <span className="text-xs uppercase font-bold text-[#2ECC71]">Active Feed</span>
+        <h3 className="text-lg font-bold mb-4">{currentMonitoredFrequency.name}</h3>
+        {activeFeed.map(item => (
+          <SpillCard key={item.id} item={item} activeFrequency={currentMonitoredFrequency} onReply={handleReplyClick} />
+        ))}
+      </div>
+    </div>
   );
 };
 
-// --- App Root ---
-type Screen = 'onboarding' | 'frequency' | 'dashboard';
-
+// --- Command Lifecycle Orchestrator ---
 export default function App() {
-  const [screen, setScreen] = useState<Screen>('onboarding');
-  const [identity, setIdentity] = useState<string | null>(null);
+  const [step, setStep] = useState<'onboarding' | 'frequency' | 'dashboard'>('onboarding');
+  const [userIdentity, setUserIdentity] = useState<string>('');
   const [homeFrequency, setHomeFrequency] = useState<FrequencyDef | null>(null);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  const handleOnboardingComplete = (id: string) => {
-    setIdentity(id);
-    setScreen('frequency');
+  // Auto-Login Listener to restore returning users
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        // Recover user display name identity or build custom template
+        const storedIdentity = localStorage.getItem("cipher_identity") || user.displayName || `Anonymous_${user.uid.slice(0, 5)}`;
+        setUserIdentity(storedIdentity);
+        
+        // Recover previous chosen frequency choice if it exists
+        const savedFreqId = localStorage.getItem("cipher_freq");
+        const matchingFreq = FREQUENCIES.find(f => f.id === savedFreqId);
+        
+        if (matchingFreq) {
+          setHomeFrequency(matchingFreq);
+          setStep('dashboard');
+        } else {
+          setStep('frequency');
+        }
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleOnboardingComplete = async (generatedIdentity: string) => {
+    setIsLoggingIn(true);
+    try {
+      await initializeAnonymousUser();
+      localStorage.setItem("cipher_identity", generatedIdentity);
+      setUserIdentity(generatedIdentity);
+      setStep('frequency');
+    } catch (err) {
+      console.error("Auth initialization workflow faulted: ", err);
+    } finally {
+      setIsLoggingIn(false);
+    }
   };
 
-  const handleFrequencySelect = (freq: FrequencyDef) => {
-    setHomeFrequency(freq);
-    setScreen('dashboard');
+  const handleFrequencySelect = (selectedFreq: FrequencyDef) => {
+    localStorage.setItem("cipher_freq", selectedFreq.id);
+    setHomeFrequency(selectedFreq);
+    setStep('dashboard');
   };
 
   return (
-    <div className="min-h-[100dvh] w-full relative bg-[#0B0F0C] text-white overflow-hidden font-sans selection:bg-[#2ECC71] selection:text-[#0B0F0C]">
+    <div className="relative w-screen h-screen bg-[#0B0F0C] text-white overflow-hidden font-sans select-none antialiased">
       <AnimatePresence mode="wait">
-        {screen === 'onboarding' && (
-          <OnboardingScreen key="onboarding" onComplete={handleOnboardingComplete} />
+        {step === 'onboarding' && (
+          <OnboardingScreen onComplete={handleOnboardingComplete} isLoggingIn={isLoggingIn} />
         )}
-        {screen === 'frequency' && identity && (
-          <FrequencySelectionScreen key="frequency" identity={identity} onSelect={handleFrequencySelect} />
+        {step === 'frequency' && (
+          <FrequencySelectionScreen identity={userIdentity} onSelect={handleFrequencySelect} />
         )}
-        {screen === 'dashboard' && homeFrequency && identity && (
-          <DashboardScreen
-            key="dashboard"
-            homeFrequency={homeFrequency}
-            userIdentity={identity}
-            allFrequencies={FREQUENCIES}
-          />
+        {step === 'dashboard' && homeFrequency && (
+          <DashboardScreen homeFrequency={homeFrequency} userIdentity={userIdentity} allFrequencies={FREQUENCIES} />
         )}
       </AnimatePresence>
     </div>

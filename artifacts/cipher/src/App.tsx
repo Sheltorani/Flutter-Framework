@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Layers, Droplets, MessageCircle, User, X, Send, Lock, ArrowLeft, Home, Mic, Film } from 'lucide-react';
-import { auth, initializeAnonymousUser } from './firebase';
-import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { 
+  Layers, Droplets, MessageCircle, User, 
+  X, Send, Lock, ArrowLeft, Home, Mic, Film 
+} from 'lucide-react';
+import { auth, initializeAnonymousUser, onAuthStateChanged } from './firebase';
 
 export interface ChatMessage {
   sender: string;
@@ -73,7 +75,6 @@ const AmbientBackground = () => (
   </div>
 );
 
-// --- Screen 1: Onboarding ---
 const OnboardingScreen = ({ onComplete, isLoggingIn }: { onComplete: (id: string) => void; isLoggingIn: boolean }) => {
   const [identity] = useState<string>(() => {
     const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
@@ -167,7 +168,6 @@ const OnboardingScreen = ({ onComplete, isLoggingIn }: { onComplete: (id: string
   );
 };
 
-// --- Screen 2: Frequency Selection ---
 const FrequencySelectionScreen = ({
   identity,
   onSelect,
@@ -250,7 +250,6 @@ const FrequencySelectionScreen = ({
   );
 };
 
-// --- Spill Card Component ---
 const SpillCard = ({
   item,
   activeFrequency,
@@ -302,7 +301,6 @@ const SpillCard = ({
   );
 };
 
-// --- Screen 3: Dashboard ---
 const DashboardScreen = ({
   homeFrequency,
   userIdentity,
@@ -395,22 +393,18 @@ const DashboardScreen = ({
   );
 };
 
-// --- Command Lifecycle Orchestrator ---
 export default function App() {
   const [step, setStep] = useState<'onboarding' | 'frequency' | 'dashboard'>('onboarding');
   const [userIdentity, setUserIdentity] = useState<string>('');
   const [homeFrequency, setHomeFrequency] = useState<FrequencyDef | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  // Auto-Login Listener to restore returning users
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
-        // Recover user display name identity or build custom template
         const storedIdentity = localStorage.getItem("cipher_identity") || user.displayName || `Anonymous_${user.uid.slice(0, 5)}`;
         setUserIdentity(storedIdentity);
         
-        // Recover previous chosen frequency choice if it exists
         const savedFreqId = localStorage.getItem("cipher_freq");
         const matchingFreq = FREQUENCIES.find(f => f.id === savedFreqId);
         

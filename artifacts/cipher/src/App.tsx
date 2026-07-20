@@ -4,12 +4,21 @@ import {
   Layers, Droplets, MessageCircle, User, 
   X, Send, Lock, ArrowLeft, Home, Mic, Film 
 } from 'lucide-react';
-import { auth, initializeAnonymousUser, onAuthStateChanged } from './firebase';
+import { auth, db, initializeAnonymousUser, onAuthStateChanged } from './firebase';
+import { 
+  collection, 
+  addDoc, 
+  query, 
+  where, 
+  orderBy, 
+  onSnapshot, 
+  serverTimestamp 
+} from 'firebase/firestore';
 
 export interface ChatMessage {
   sender: string;
   message: string;
-  timestamp: Date;
+  timestamp: any;
   isVoice?: boolean;
   isVideo?: boolean;
 }
@@ -29,6 +38,7 @@ export interface SpillCardData {
   parentFrequencyId: string;
   hasVoiceNote?: boolean;
   hasPixelVideo?: boolean;
+  createdAt?: any;
 }
 
 const adjectives = ["Shadow", "Ghost", "Cypress", "Mint", "Echo", "Lunar", "Sage", "Amber"];
@@ -204,22 +214,10 @@ const FrequencySelectionScreen = ({
           </p>
         </motion.div>
 
-        <motion.div
-          className="flex-1 overflow-y-auto space-y-4 pb-12 scrollbar-hide"
-          initial="hidden"
-          animate="show"
-          variants={{
-            hidden: { opacity: 0 },
-            show: { opacity: 1, transition: { staggerChildren: 0.15, delayChildren: 0.2 } },
-          }}
-        >
+        <div className="flex-1 overflow-y-auto space-y-4 pb-12 scrollbar-hide">
           {FREQUENCIES.map((freq) => (
             <motion.div
               key={freq.id}
-              variants={{
-                hidden: { opacity: 0, y: 20 },
-                show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 24 } },
-              }}
               whileHover={{ scale: 1.02, filter: 'brightness(1.15)' }}
               whileTap={{ scale: 0.98 }}
               onClick={() => onSelect(freq)}
@@ -244,7 +242,7 @@ const FrequencySelectionScreen = ({
               </p>
             </motion.div>
           ))}
-        </motion.div>
+        </div>
       </div>
     </motion.div>
   );
@@ -254,16 +252,18 @@ const SpillCard = ({
   item,
   activeFrequency,
   onReply,
+  userIdentity,
 }: {
   item: SpillCardData;
   activeFrequency: FrequencyDef;
   onReply: (item: SpillCardData) => void;
+  userIdentity: string;
 }) => {
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-[rgba(14,20,17,0.7)] rounded-[16px] border border-white/[0.06] mb-4 p-[18px] backdrop-blur-md"
+      className="bg-[rgba(14,20,17,0.7)] rounded-[16px] border border-white/[0.06] mb-4 p-[18px] backdrop-blur-md text-left"
     >
       <div className="flex justify-between items-center mb-3">
         <span className="font-bold text-[13px]" style={{ color: activeFrequency.textColor }}>
@@ -289,13 +289,15 @@ const SpillCard = ({
       </div>
 
       <div className="flex items-center justify-end border-t border-white/[0.04] pt-3">
-        <button
-          onClick={() => onReply(item)}
-          className="flex items-center gap-1.5 hover:opacity-80 transition-opacity active:scale-95"
-        >
-          <span className="text-[#8E9A92] text-[12px] font-medium">Reply Lowkey</span>
-          <MessageCircle size={14} style={{ color: activeFrequency.textColor }} />
-        </button>
+        {item.author !== userIdentity && (
+          <button
+            onClick={() => onReply(item)}
+            className="flex items-center gap-1.5 hover:opacity-80 transition-opacity active:scale-95"
+          >
+            <span className="text-[#8E9A92] text-[12px] font-medium">Reply Lowkey</span>
+            <MessageCircle size={14} style={{ color: activeFrequency.textColor }} />
+          </button>
+        )}
       </div>
     </motion.div>
   );
@@ -310,84 +312,119 @@ const DashboardScreen = ({
   userIdentity: string;
   allFrequencies: FrequencyDef[];
 }) => {
-  const [activeTab, setActiveTab] = useState('feeds');
   const [currentMonitoredFrequency, setCurrentMonitoredFrequency] = useState<FrequencyDef>(homeFrequency);
-
-  const [feeds, setFeeds] = useState<Record<string, SpillCardData[]>>(() => ({
-    the_lost: [
-      { id: 'l1', author: 'Ghost_Spire-112', timeAgo: '2m ago', text: 'Cleaning out his room today. Found an old notebook containing sketches of us.', parentFrequencyId: 'the_lost' },
-    ],
-    the_lovers: [
-      { id: 'lv1', author: 'Amber_Cinder-901', timeAgo: '5m ago', text: 'You unfollowed me but you still look at my stories from an alternative account. I see you.', parentFrequencyId: 'the_lovers' },
-    ],
-    the_dreamers: [
-      { id: 'd1', author: 'Neon_Glitch-774', timeAgo: '1m ago', text: 'Designing a full consumer tech platform completely from a mobile browser right now.', parentFrequencyId: 'the_dreamers' },
-    ],
-  }));
-
-  const [isSpillSheetOpen, setIsSpillSheetOpen] = useState(false);
+  const [liveSpills, setLiveSpills] = useState<SpillCardData[]>([]);
   const [spillText, setSpillText] = useState('');
-  const [attachVoiceMock, setAttachVoiceMock] = useState(false);
-  const [attachVideoMock, setAttachVideoMock] = useState(false);
-  const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error'; bgColor?: string } | null>(null);
 
-  const [privateThreads, setPrivateThreads] = useState<LowkeyThread[]>([]);
-  const [isLowkeySheetOpen, setIsLowkeySheetOpen] = useState(false);
-  const [lowkeyTargetCard, setLowkeyTargetCard] = useState<SpillCardData | null>(null);
-  const [chatText, setChatText] = useState('');
+  // Read Live Spills from Database in Real Time
+  useEffect(() => {
+    const q = query(
+      collection(db, 'spills'),
+      where('parentFrequencyId', '==', currentMonitoredFrequency.id),
+      orderBy('createdAt', 'desc')
+    );
 
-  const [innerChatText, setInnerChatText] = useState('');
-  const [userTotalSpillsCount, setUserTotalSpillsCount] = useState(0);
-  const [activeChatThread, setActiveChatThread] = useState<LowkeyThread | null>(null);
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data: SpillCardData[] = [];
+      snapshot.forEach((doc) => {
+        const item = doc.data();
+        data.push({
+          id: doc.id,
+          author: item.author || 'Anonymous',
+          text: item.text || '',
+          parentFrequencyId: item.parentFrequencyId,
+          hasVoiceNote: item.hasVoiceNote,
+          hasPixelVideo: item.hasPixelVideo,
+          timeAgo: item.createdAt ? new Date(item.createdAt.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now',
+        });
+      });
+      setLiveSpills(data);
+    });
 
-  const showToast = (text: string, type: 'success' | 'error', bgColor?: string) => {
-    setToastMessage({ text, type, bgColor });
-    setTimeout(() => setToastMessage(null), 2500);
+    return () => unsubscribe();
+  }, [currentMonitoredFrequency]);
+
+  // Transmit New Spill to Firestore
+  const _dispatchNewTransmission = async () => {
+    if (!spillText.trim()) return;
+
+    try {
+      await addDoc(collection(db, 'spills'), {
+        author: userIdentity,
+        text: spillText.trim(),
+        parentFrequencyId: currentMonitoredFrequency.id,
+        hasVoiceNote: false,
+        hasPixelVideo: false,
+        createdAt: serverTimestamp(),
+      });
+      setSpillText('');
+    } catch (e) {
+      console.error("Error broadcasting spill: ", e);
+    }
   };
-
-  const _dispatchNewTransmission = () => {
-    if (!spillText.trim() && !attachVoiceMock && !attachVideoMock) return;
-    const newCard: SpillCardData = {
-      id: Date.now().toString(),
-      author: userIdentity,
-      timeAgo: 'Just Now',
-      text: spillText.trim() || 'Sent an encrypted telemetry package.',
-      parentFrequencyId: homeFrequency.id,
-      hasVoiceNote: attachVoiceMock,
-      hasPixelVideo: attachVideoMock,
-    };
-
-    setFeeds(prev => ({
-      ...prev,
-      [homeFrequency.id]: [newCard, ...(prev[homeFrequency.id] || [])],
-    }));
-    setUserTotalSpillsCount(prev => prev + 1);
-    setSpillText('');
-    setAttachVoiceMock(false);
-    setAttachVideoMock(false);
-    setIsSpillSheetOpen(false);
-    setCurrentMonitoredFrequency(homeFrequency);
-    setActiveTab('feeds');
-  };
-
-  const handleReplyClick = (card: SpillCardData) => {
-    if (card.author === userIdentity) return;
-    setLowkeyTargetCard(card);
-    setIsLowkeySheetOpen(true);
-  };
-
-  const activeFeed = feeds[currentMonitoredFrequency.id] || [];
 
   return (
-    <div className="w-full h-full flex flex-col items-center justify-center p-6 text-white text-center">
-      <h2 className="text-xl font-bold mb-2">Connected to Dome</h2>
-      <p className="text-sm opacity-60 mb-6 font-mono">{userIdentity}</p>
-      <div className="bg-white/5 border border-white/10 p-4 rounded-xl text-left w-full max-w-sm">
-        <span className="text-xs uppercase font-bold text-[#2ECC71]">Active Feed</span>
-        <h3 className="text-lg font-bold mb-4">{currentMonitoredFrequency.name}</h3>
-        {activeFeed.map(item => (
-          <SpillCard key={item.id} item={item} activeFrequency={currentMonitoredFrequency} onReply={handleReplyClick} />
-        ))}
+    <div className="w-full h-full flex flex-col items-center p-6 text-white overflow-y-auto">
+      <AmbientBackground />
+      <div className="z-10 w-full max-w-md flex flex-col h-full">
+        <header className="flex justify-between items-center mb-6">
+          <div className="text-left">
+            <h2 className="text-xs uppercase tracking-[0.2em] font-bold text-[#2ECC71]">Connected</h2>
+            <p className="text-sm opacity-60 font-mono">{userIdentity}</p>
+          </div>
+          <div className="flex gap-2">
+            {allFrequencies.map(f => (
+              <button 
+                key={f.id}
+                onClick={() => setCurrentMonitoredFrequency(f)}
+                className="px-3 py-1.5 text-xs rounded-full font-bold transition-all"
+                style={{
+                  backgroundColor: currentMonitoredFrequency.id === f.id ? f.primaryColor : 'rgba(255,255,255,0.05)',
+                  color: currentMonitoredFrequency.id === f.id ? f.textColor : 'rgba(255,255,255,0.4)'
+                }}
+              >
+                {f.name.split(' ')[1] || f.name}
+              </button>
+            ))}
+          </div>
+        </header>
+
+        {/* Input Broadcast Section */}
+        <div className="bg-white/[0.03] border border-white/[0.08] p-4 rounded-xl mb-6 flex flex-col gap-2">
+          <textarea
+            value={spillText}
+            onChange={(e) => setSpillText(e.target.value)}
+            placeholder={`Spill anonymously to ${currentMonitoredFrequency.name}...`}
+            className="bg-transparent w-full resize-none outline-none text-sm placeholder-white/30 h-20 text-left"
+          />
+          <div className="flex justify-between items-center border-t border-white/[0.05] pt-3">
+            <span className="text-[11px] text-white/40">Broadcasting instantly</span>
+            <button
+              onClick={_dispatchNewTransmission}
+              disabled={!spillText.trim()}
+              className="p-2 bg-[#2ECC71] disabled:bg-white/10 text-black disabled:text-white/30 rounded-lg transition-all"
+            >
+              <Send size={14} />
+            </button>
+          </div>
+        </div>
+
+        {/* Live Feed List */}
+        <div className="flex-1 overflow-y-auto pb-10 scrollbar-hide">
+          {liveSpills.length === 0 ? (
+            <p className="text-sm opacity-40 mt-10">The airwaves are quiet here. Be the first to spill.</p>
+          ) : (
+            liveSpills.map(item => (
+              <SpillCard 
+                key={item.id} 
+                item={item} 
+                activeFrequency={currentMonitoredFrequency} 
+                onReply={() => {}} 
+                userIdentity={userIdentity}
+              />
+            ))
+          )}
+        </div>
       </div>
     </div>
   );
@@ -454,4 +491,5 @@ export default function App() {
       </AnimatePresence>
     </div>
   );
-}
+              }
+                                          
